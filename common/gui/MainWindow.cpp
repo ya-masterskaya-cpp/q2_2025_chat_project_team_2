@@ -155,7 +155,8 @@ void MainWindow::ConstructInterface() {
         wxString::Format("0 / %d", MAX_MESSAGE_LENGTH));
 
     // Фиксируем ширину на основе максимально возможной длины
-    wxSize text_size = message_length_label_->GetTextExtent("9999 / 9999");
+    wxString max_length_text = wxString::Format("9999 / %d", MAX_MESSAGE_LENGTH);
+    wxSize text_size = message_length_label_->GetTextExtent(max_length_text);
     message_length_label_->SetMinSize(text_size);
     message_length_label_->SetLabel("0 / 0"); // Сбрасываем начальное значение
 
@@ -273,7 +274,7 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
     if (!text.IsEmpty()) {
 
         //проверяем длину сообщения
-        size_t useful_count = CountUsefulChars(text);
+        int  useful_count = CountUsefulChars(text);
         if (useful_count > MAX_MESSAGE_LENGTH) {
             wxMessageBox(
                 wxString::Format("Сообщение слишком длинное! Максимум %d символов.\n\nСимволов: %d",

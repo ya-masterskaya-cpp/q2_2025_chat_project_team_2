@@ -11,6 +11,7 @@ find_package(Boost REQUIRED COMPONENTS system CONFIG)
 find_package(wxWidgets REQUIRED COMPONENTS core base adv CONFIG)
 find_package(SQLite3 REQUIRED CONFIG)
 find_package(OpenSSL REQUIRED CONFIG) 
+find_package(nlohmann_json REQUIRED)
 
 # дополнительные структуры
 add_library(add_struct INTERFACE 
@@ -97,4 +98,5 @@ add_executable(server
 )
 target_link_libraries(server PRIVATE
     Boost::system
+	nlohmann_json::nlohmann_json
 )

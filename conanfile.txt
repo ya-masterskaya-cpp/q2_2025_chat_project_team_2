@@ -3,6 +3,7 @@ boost/1.88.0
 wxwidgets/3.2.6
 sqlite3/3.42.0
 openssl/3.4.1
+nlohmann_json/3.12.0
 
 [generators]
 CMakeToolchain

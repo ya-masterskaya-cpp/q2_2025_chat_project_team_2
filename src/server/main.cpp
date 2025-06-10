@@ -9,7 +9,7 @@
 #include <condition_variable>
 #include <unordered_map>
 #include <vector>
-#include "json.h"
+#include "nlohmann/json.hpp"
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
