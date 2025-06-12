@@ -1,0 +1,2 @@
+**/sqlite3*.c text eol=lf
+**/sqlite3*.h text eol=lf
