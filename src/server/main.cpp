@@ -9,7 +9,8 @@
 #include <condition_variable>
 #include <unordered_map>
 #include <vector>
-#include "nlohmann/json.hpp"
+#include "json.h"
+#include <unordered_set>
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -19,7 +20,10 @@ using tcp = asio::ip::tcp;
 
 const int GENERAL = 101;
 const int LOGIN = 111;
-const int NAME = 112;
+const int CHANGE_NAME = 112;
+const int CREATE_ROOM = 113;
+const int ENTER_ROOM = 114;
+const int ASK_ROOMS = 115;
 
 struct MsgQueue
 {
@@ -40,7 +44,7 @@ struct MsgQueue
     {
         std::unique_lock<std::mutex> lk(m_);
         while (true) {
-            cv_.wait(lk);
+            cv_.wait(lk, [&] { return msg_.size() > 0; });
             for (auto& mes : msg_)
             {
                 func(mes);
@@ -55,7 +59,7 @@ const int out_port = 9003;
 const std::string host = "127.0.0.1";
 
 using UserSessions = std::unordered_map<std::string, MsgQueue*>;
-using RoomSessions = std::unordered_map<std::string, std::vector<MsgQueue*>>;
+using RoomSessions = std::unordered_map<std::string, std::unordered_set<MsgQueue*>>;
 
 class Server
 {
@@ -91,21 +95,73 @@ private:
             websocket::stream<tcp::socket> ws(std::move(socket));
             ws.accept();
             beast::flat_buffer buffer;
+            std::string name;
+            std::string s;
+            nlohmann::json j;
+            nlohmann::json jj;
+            std::vector<std::string> v;
+            int type;
             /*start cycle*/
             while (true)
             {
                 ws.read(buffer);
-                nlohmann::json j =
-                    nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
-                int type = j["type"];
+                j = nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
+                type = j["type"];  
                 switch (type)
                 {
                 case LOGIN:
-                    session->add(j);
+                    name = j["user"];
+                    users_[name].insert(session);
+                    users_["general"].insert(session);
+                    session->add(make_ok_answer(LOGIN,name));
                     break;
-                case NAME:
-                    users_[j["name"]] = session;
-                    session->add(j);
+                case CHANGE_NAME:
+                    s = j["name"];
+                    if (users_.count(s))
+                    {
+                        session->add(make_err_answer(CHANGE_NAME, s));
+                    }
+                    else
+                    {                       
+                        users_.erase(name);
+                        users_[s].insert(session);
+                        name =s;
+                        session->add(make_ok_answer(CHANGE_NAME, s));
+                    }
+                    break;
+                case CREATE_ROOM:
+                    s = j["room"];
+                    if (users_.count(s))
+                    {
+                        session->add(make_err_answer(CREATE_ROOM, s));
+                    }
+                    else
+                    {
+                        users_[s].insert(session);                        
+                        session->add(make_ok_answer(CREATE_ROOM, s));
+                    }
+                    
+                    break;
+                case ENTER_ROOM:
+                    s = j["room"];
+                    if (!users_.count(s))
+                    {
+                        session->add(make_err_answer(ENTER_ROOM, s));
+                    }
+                    else
+                    { 
+                        users_[s].insert(session);                        
+                        session->add(make_ok_answer(ENTER_ROOM, s));
+                    }
+                    break;
+                case ASK_ROOMS:
+                    for (auto& u : users_)
+                    {
+                        v.push_back(u.first);
+                    }
+                    jj["type"] = ASK_ROOMS;
+                    jj["rooms"] = v;
+                    session->add(jj);
                     break;
                 case GENERAL:                
                     in_msg.add(j);
@@ -135,25 +191,36 @@ private:
             tcp::socket out_socket(ioc);
             out_acceptor.accept(out_socket);
             std::thread(&Server::sender, this, std::move(out_socket), session).detach();
-            
         }
     }
 
     void shuttle()
     {
         in_msg.wait_on_queue([&](const nlohmann::json& j) {
-
-            for (auto& user : users_)
+            for (auto ses : users_[j["room"]])
             {
-                user.second->add(j);
+                ses->add(j);
             }});
-            
-        return;
     }
-
+    nlohmann::json make_ok_answer(int type, const std::string& what)
+    {
+        nlohmann::json j;
+        j["type"] = type;
+        j["what"] = what;
+        j["answer"] = "OK";
+        return j;
+    }
+    nlohmann::json make_err_answer(int type, const std::string& what)
+    {
+        nlohmann::json j;
+        j["type"] = type;
+        j["what"] = what;
+        j["answer"] = "err";
+        return j;
+    }
     asio::io_context ioc;
-    MsgQueue in_msg;
-    UserSessions users_;
+    MsgQueue in_msg; 
+    RoomSessions users_;
 };
 
 int main() {
