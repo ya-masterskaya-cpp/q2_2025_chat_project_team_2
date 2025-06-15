@@ -50,6 +50,7 @@ target_link_libraries(DatabaseLib PUBLIC SQLite::SQLite3)
 add_library(ClientLogicLib STATIC 
 	src/client/ChatClient.h
 	src/client/ChatClient.cpp
+	src/server/ClientHTTP.h
 )
 target_include_directories(ClientLogicLib PUBLIC 
     ${PROJECT_SOURCE_DIR}/src/client
@@ -57,6 +58,8 @@ target_include_directories(ClientLogicLib PUBLIC
 target_link_libraries(ClientLogicLib PUBLIC 
 	SSL_Lib
 	add_struct
+	Boost::system
+	nlohmann_json::nlohmann_json
 )
 
 # для работы с gui
@@ -94,7 +97,6 @@ target_link_libraries(client PRIVATE
 
 add_executable(server 
 	src/server/main.cpp
-	src/server/ClientHTTP.h
 )
 target_link_libraries(server PRIVATE
     Boost::system

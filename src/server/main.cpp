@@ -9,7 +9,7 @@
 #include <condition_variable>
 #include <unordered_map>
 #include <vector>
-#include "json.h"
+#include "nlohmann/json.hpp"
 #include <unordered_set>
 
 namespace asio = boost::asio;
@@ -43,7 +43,13 @@ struct MsgQueue
     template<typename F>
     void wait_on_queue(F func) {
         std::unique_lock<std::mutex> lk(m_);
+
+        std::cout << "[MsgQueue] Starting message processing loop\n";
+
         while (true) {
+
+            std::cout << "[MsgQueue] Waiting for messages...\n";
+
             cv_.wait(lk, [&] { return msg_.size() > 0 && is_online; });
             for (auto& mes : msg_) {
                 func(mes);
@@ -56,6 +62,8 @@ struct MsgQueue
         {
             std::lock_guard<std::mutex> lk(m_);
             is_online = b;
+
+            std::cout << "[MsgQueue] Session status set to: " << (b ? "online" : "offline") << "\n";
         }
     }
 };
@@ -90,6 +98,9 @@ class Server
 {
 public:
     void run_server() {
+
+        std::cout << "Starting server...\n";
+
         std::thread(&Server::shuttle, this).detach();
         std::thread(&Server::client_accept, this).detach();
         std::string s;
@@ -102,7 +113,13 @@ public:
     }
 private:    
     void sender(tcp::socket socket, MsgQueue* session) {
+
+        std::cout << "[Sender] Starting sender thread\n";
+
         websocket::stream<tcp::socket> ws(std::move(socket));
+
+        std::cout << "[Sender] Accepting WebSocket\n";
+
         ws.accept();
         ws.write(asio::buffer(
             MesBuilder(GENERAL).add("content","hello").toString()

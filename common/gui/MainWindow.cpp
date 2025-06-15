@@ -90,6 +90,7 @@ MainWindow::MainWindow(std::unique_ptr<client::ChatClient> client) :
     current_username_(client_->GetUsername()) //пока оставляем костыль, потом изменить
     {
     ConstructInterface();
+    CreateRoom(MAIN_ROOM_NAME);
 }
 
 void MainWindow::ConstructInterface() {
@@ -322,33 +323,34 @@ void MainWindow::OnCreateRoom(wxCommandEvent& event) {
 }
 
 void MainWindow::OnRoomList(wxCommandEvent& event) {
-    // Эмуляция запроса к серверу - получение списка комнат
-    std::vector<wxString> all_rooms = {
-        "general", "room1", "room2", "room3", "developers", "designers"
-    };
+    client_->RequestRoomList();
+    //// Эмуляция запроса к серверу - получение списка комнат
+    //std::vector<wxString> all_rooms = {
+    //    "general", "room1", "room2", "room3", "developers", "designers"
+    //};
 
-    // Получаем список уже добавленных комнат
-    std::set<wxString> existing_rooms;
-    for (size_t i = 0; i < room_notebook_->GetPageCount(); i++) {
-        existing_rooms.insert(room_notebook_->GetPageText(i));
-    }
+    //// Получаем список уже добавленных комнат
+    //std::set<wxString> existing_rooms;
+    //for (size_t i = 0; i < room_notebook_->GetPageCount(); i++) {
+    //    existing_rooms.insert(room_notebook_->GetPageText(i));
+    //}
 
-    // Создаем диалог
-    ListSelectionDialog dlg(this, "Доступные комнаты", all_rooms, existing_rooms);
-    if (dlg.ShowModal() == wxID_OK) {
-        wxString selected_room = dlg.GetSelectedItem();
-        if (!selected_room.IsEmpty()) {
-            CreateRoom(selected_room.ToStdString());
+    //// Создаем диалог
+    //ListSelectionDialog dlg(this, "Доступные комнаты", all_rooms, existing_rooms);
+    //if (dlg.ShowModal() == wxID_OK) {
+    //    wxString selected_room = dlg.GetSelectedItem();
+    //    if (!selected_room.IsEmpty()) {
+    //        CreateRoom(selected_room.ToStdString());
 
-            // Эмуляция уведомления сервера
-            IncomingMessage sys_msg;
-            sys_msg.sender = SYSTEM_SENDER_NAME;
-            sys_msg.room = selected_room.ToStdString();
-            sys_msg.text = current_username_ + " присоединился к комнате";
-            sys_msg.timestamp = std::chrono::system_clock::now();
-            AddMessage(sys_msg);
-        }
-    }
+    //        // Эмуляция уведомления сервера
+    //        IncomingMessage sys_msg;
+    //        sys_msg.sender = SYSTEM_SENDER_NAME;
+    //        sys_msg.room = selected_room.ToStdString();
+    //        sys_msg.text = current_username_ + " присоединился к комнате";
+    //        sys_msg.timestamp = std::chrono::system_clock::now();
+    //        AddMessage(sys_msg);
+    //    }
+    //}
 }
 
 void MainWindow::OnUserList(wxCommandEvent& event) {
@@ -387,30 +389,31 @@ void MainWindow::OnUserList(wxCommandEvent& event) {
 }
 
 void MainWindow::OnLeaveRoom(wxCommandEvent& event) {
-    int selection = room_notebook_->GetSelection();
-    if (selection == wxNOT_FOUND) {
-        wxMessageBox("Выберите комнату для выхода", "Ошибка", wxICON_WARNING);
-        return;
-    }
+    wxMessageBox("Выход из комнаты временно не поддерживается", "Информация", wxICON_INFORMATION);
+    //int selection = room_notebook_->GetSelection();
+    //if (selection == wxNOT_FOUND) {
+    //    wxMessageBox("Выберите комнату для выхода", "Ошибка", wxICON_WARNING);
+    //    return;
+    //}
 
-    wxString room_name = room_notebook_->GetPageText(selection);
+    //wxString room_name = room_notebook_->GetPageText(selection);
 
-    if (room_name == MAIN_ROOM_NAME) {
-        wxMessageBox("Нельзя выйти из основной комнаты", "Ошибка", wxICON_WARNING);
-        return;
-    }
+    //if (room_name == MAIN_ROOM_NAME) {
+    //    wxMessageBox("Нельзя выйти из основной комнаты", "Ошибка", wxICON_WARNING);
+    //    return;
+    //}
 
-    //Эмуляция уведомления сервера
-    IncomingMessage sys_msg;
-    sys_msg.sender = SYSTEM_SENDER_NAME;
-    sys_msg.room = MAIN_ROOM_NAME;
-    sys_msg.text = current_username_ + " покинул комнату";
-    sys_msg.timestamp = std::chrono::system_clock::now();
-    AddMessage(sys_msg);
+    ////Эмуляция уведомления сервера
+    //IncomingMessage sys_msg;
+    //sys_msg.sender = SYSTEM_SENDER_NAME;
+    //sys_msg.room = MAIN_ROOM_NAME;
+    //sys_msg.text = current_username_ + " покинул комнату";
+    //sys_msg.timestamp = std::chrono::system_clock::now();
+    //AddMessage(sys_msg);
 
-    //Удаляем комнату из интерфейса
-    room_notebook_->DeletePage(selection);
-    rooms_.erase(room_name.ToStdString());
+    ////Удаляем комнату из интерфейса
+    //room_notebook_->DeletePage(selection);
+    //rooms_.erase(room_name.ToStdString());
 }
 
 void MainWindow::OnChangedUserName(wxCommandEvent& event) {
@@ -453,6 +456,7 @@ void MainWindow::AddMessage(const IncomingMessage& msg) {
 
     //Отправляем сообщение в комнату
     rooms_[msg.room]->AddMessage(msg);
+
 }
 
 void MainWindow::OnTabChanged(wxNotebookEvent& event) {
