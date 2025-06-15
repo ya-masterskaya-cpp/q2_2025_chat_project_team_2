@@ -30,28 +30,53 @@ struct MsgQueue
     std::mutex m_;
     std::condition_variable cv_;
     std::vector<nlohmann::json> msg_;
+    bool is_online = true;
 
-    void add(const nlohmann::json& j)
-    {
+    void add(const nlohmann::json& j) {
         {
             std::lock_guard<std::mutex> lk(m_);
             msg_.push_back(j);
         }
         cv_.notify_all();
     }
+
     template<typename F>
-    void wait_on_queue(F func)
-    {
+    void wait_on_queue(F func) {
         std::unique_lock<std::mutex> lk(m_);
         while (true) {
-            cv_.wait(lk, [&] { return msg_.size() > 0; });
-            for (auto& mes : msg_)
-            {
+            cv_.wait(lk, [&] { return msg_.size() > 0 && is_online; });
+            for (auto& mes : msg_) {
                 func(mes);
             }
             msg_.clear();
         }
     }
+
+    void validate(bool b) {
+        {
+            std::lock_guard<std::mutex> lk(m_);
+            is_online = b;
+        }
+    }
+};
+
+struct MesBuilder
+{
+    MesBuilder(int type) {
+        j["type"] = type;
+    }
+    MesBuilder& add(const std::string& key, const std::string& value) {
+        j[key] = value;
+        return *this;
+    }
+    MesBuilder& add(const std::string& key, const std::vector<std::string>& value) {
+        j[key] = value;
+        return *this;
+    }
+    std::string toString() {
+        return j.dump();
+    }
+    nlohmann::json j;
 };
 
 const int in_port = 9002;
@@ -64,16 +89,13 @@ using RoomSessions = std::unordered_map<std::string, std::unordered_set<MsgQueue
 class Server
 {
 public:
-    void run_server()
-    {
+    void run_server() {
         std::thread(&Server::shuttle, this).detach();
         std::thread(&Server::client_accept, this).detach();
         std::string s;
-        while (true)
-        {
+        while (true) {
             getline(std::cin, s);
-            if (s == "q")
-            {
+            if (s == "q") {
                 break;
             }
         }
@@ -82,10 +104,9 @@ private:
     void sender(tcp::socket socket, MsgQueue* session) {
         websocket::stream<tcp::socket> ws(std::move(socket));
         ws.accept();
-        nlohmann::json hello;
-        hello["type"] = GENERAL;
-        hello["content"] = "hello";
-        ws.write(asio::buffer(hello.dump()));
+        ws.write(asio::buffer(
+            MesBuilder(GENERAL).add("content","hello").toString()
+        ));
         session->wait_on_queue([&](const nlohmann::json& j) {
             ws.write(asio::buffer(j.dump())); });
     }
@@ -97,74 +118,65 @@ private:
             beast::flat_buffer buffer;
             std::string name;
             std::string s;
-            nlohmann::json j;
-            nlohmann::json jj;
+            nlohmann::json mes;
             std::vector<std::string> v;
             int type;
-            /*start cycle*/
             while (true)
             {
                 ws.read(buffer);
-                j = nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
-                type = j["type"];  
+                mes = nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
+                type = mes["type"];  
                 switch (type)
                 {
                 case LOGIN:
-                    name = j["user"];
+                    name = mes["user"];
                     users_[name].insert(session);
                     users_["general"].insert(session);
                     session->add(make_ok_answer(LOGIN,name));
                     break;
                 case CHANGE_NAME:
-                    s = j["name"];
-                    if (users_.count(s))
-                    {
+                    s = mes["name"];
+                    if (users_.count(s)) {
                         session->add(make_err_answer(CHANGE_NAME, s));
                     }
-                    else
-                    {                       
+                    else {                       
                         users_.erase(name);
                         users_[s].insert(session);
-                        name =s;
+                        name = s;
                         session->add(make_ok_answer(CHANGE_NAME, s));
                     }
                     break;
                 case CREATE_ROOM:
-                    s = j["room"];
-                    if (users_.count(s))
-                    {
+                    s = mes["room"];
+                    if (users_.count(s)) {
                         session->add(make_err_answer(CREATE_ROOM, s));
                     }
-                    else
-                    {
+                    else {
                         users_[s].insert(session);                        
                         session->add(make_ok_answer(CREATE_ROOM, s));
                     }
-                    
                     break;
                 case ENTER_ROOM:
-                    s = j["room"];
-                    if (!users_.count(s))
-                    {
+                    s = mes["room"];
+                    if (!users_.count(s))  {
                         session->add(make_err_answer(ENTER_ROOM, s));
                     }
-                    else
-                    { 
+                    else { 
                         users_[s].insert(session);                        
                         session->add(make_ok_answer(ENTER_ROOM, s));
                     }
                     break;
                 case ASK_ROOMS:
-                    for (auto& u : users_)
-                    {
+                    for (auto& u : users_) {
                         v.push_back(u.first);
                     }
-                    jj["type"] = ASK_ROOMS;
-                    jj["rooms"] = v;
-                    session->add(jj);
+                    session->add(
+                        MesBuilder(ASK_ROOMS).add("rooms", v).j
+                    );
+                    v.clear();
                     break;
                 case GENERAL:                
-                    in_msg.add(j);
+                    in_msg.add(mes);
                     break;
                 default:
                     break;
@@ -173,12 +185,12 @@ private:
             }
         }
         catch (...) {
-            std::cout << "Read error: " << std::endl;
+            session->validate(false);
+            std::cout << "Read error" << std::endl;
         }
     }
     
-    void client_accept()
-    {
+    void client_accept() {
         tcp::acceptor in_acceptor(ioc, tcp::endpoint(tcp::v4(), in_port));
         tcp::acceptor out_acceptor(ioc, tcp::endpoint(tcp::v4(), out_port));
         while (true) {
@@ -194,30 +206,30 @@ private:
         }
     }
 
-    void shuttle()
-    {
+    void shuttle() {
         in_msg.wait_on_queue([&](const nlohmann::json& j) {
-            for (auto ses : users_[j["room"]])
-            {
+            for (auto ses : users_[j["room"]]) {
                 ses->add(j);
             }});
     }
-    nlohmann::json make_ok_answer(int type, const std::string& what)
-    {
-        nlohmann::json j;
-        j["type"] = type;
-        j["what"] = what;
-        j["answer"] = "OK";
-        return j;
+
+    nlohmann::json make_ok_answer(int type, const std::string& what) {
+        return MesBuilder(type).add("what", what).add("answer", "OK").j;
     }
-    nlohmann::json make_err_answer(int type, const std::string& what)
-    {
-        nlohmann::json j;
-        j["type"] = type;
-        j["what"] = what;
-        j["answer"] = "err";
-        return j;
+
+    nlohmann::json make_err_answer(int type, const std::string& what) {
+        return MesBuilder(type).add("what", what).add("answer", "err").j;
     }
+
+    void remove_user(MsgQueue* session) {
+        for (auto& u : users_) {
+            u.second.erase(session);
+            if (u.second.empty()) {
+                users_.erase(u.first);
+            }
+        }
+    }
+
     asio::io_context ioc;
     MsgQueue in_msg; 
     RoomSessions users_;

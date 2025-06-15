@@ -32,8 +32,7 @@ struct MesQueue
     std::mutex m_;
     std::condition_variable cv_;
     std::vector<std::string> msg_;
-    void add(const std::string& s)
-    {
+    void add(const std::string& s) {
         {
             std::lock_guard<std::mutex> lk(m_);
             msg_.push_back(s);
@@ -42,13 +41,11 @@ struct MesQueue
     }
 
     template<typename F>
-    void wait_on_message(F func)
-    {
+    void wait_on_message(F func) {
         std::unique_lock<std::mutex> lk(m_);
         while (true) {
             cv_.wait(lk, [&] { return msg_.size() > 0; } );
-            for (auto& mes : msg_)
-            {
+            for (auto& mes : msg_) {
                 func(mes);
             }
             msg_.clear();
@@ -56,72 +53,81 @@ struct MesQueue
     }
 };
 
+struct MesBuilder
+{
+    MesBuilder(int type) {
+        j["type"] = type;
+    }
+    MesBuilder& add(const std::string key, const std::string value) {
+        j[key] = value;
+        return *this;
+    }
+    MesBuilder& add(const std::string& key, const std::vector<std::string>& value) {
+        j[key] = value;
+        return *this;
+    }
+    std::string toString() {
+        return j.dump();
+    }
+    nlohmann::json j;
+};
+
 using MessageHandler = std::function<void(const std::string&)>;
 class Client
 {
 public:
     void start(const std::string& host, const std::string& in_port,
-        const std::string& out_port)
-    {
+        const std::string& out_port) {
         std::thread(&Client::sender, this, host, in_port, out_port).detach();
-        
     }
-    void set_handler(MessageHandler mh)
-    {
+
+    void set_handler(MessageHandler mh) {
         message_handler = mh;
     }
-    void send_message(const std::string& room, const std::string& message)
-    {
-        nlohmann::json j;
-        j["type"] = GENERAL;
-        j["room"] = room;
-        j["content"] = message;
-        mq_.add(j.dump());
+
+    void send_message(const std::string& room, const std::string& message) {
+        mq_.add(
+            MesBuilder(GENERAL).add("room", room).add("content", message).toString()
+        );
     }
-    void register_user(const std::string& user, const std::string& password)
-    {
-        nlohmann::json j;
-        j["type"] = LOGIN;
-        j["user"] = user;
-        j["password"] = password;
-        mq_.add(j.dump());
+
+    void register_user(const std::string& user, const std::string& password) {
+        mq_.add(
+            MesBuilder(LOGIN).add("user", user).add("password", password).toString()
+        );
     }
-    void change_name(const std::string& name)
-    {
-        nlohmann::json j;
-        j["type"] = CHANGE_NAME;
-        j["name"] = name;
-        mq_.add(j.dump());
+
+    void change_name(const std::string& name) {
+        mq_.add(
+            MesBuilder(CHANGE_NAME).add("name", name).toString()
+        );
     }
-    void create_room(const std::string& room)
-    {
-        nlohmann::json j;
-        j["type"] = CREATE_ROOM;
-        j["room"] = room;
-        mq_.add(j.dump());
+
+    void create_room(const std::string& room) {
+        mq_.add(
+            MesBuilder(CREATE_ROOM).add("room", room).toString()
+        );
     }
-    void enter_room(const std::string& room)
-    {
-        nlohmann::json j;
-        j["type"] = ENTER_ROOM;
-        j["room"] = room;
-        mq_.add(j.dump());
+
+    void enter_room(const std::string& room) {
+        mq_.add(
+            MesBuilder(ENTER_ROOM).add("room", room).toString()
+        );
     }
-    void ask_rooms()
-    {
-        nlohmann::json j;
-        j["type"] = ASK_ROOMS;
-        mq_.add(j.dump());
+
+    void ask_rooms() {
+        mq_.add(
+            MesBuilder(ASK_ROOMS).toString()
+        );
     }
+
 private:
     void sender(const std::string& host, const std::string& in_port,
-        const std::string& out_port)
-    {
+        const std::string& out_port) {
         websocket::stream<tcp::socket> ws(ioc);
         tcp::resolver resolver(ioc);
         auto const results = resolver.resolve(host, out_port);
-        try
-        {
+        try {
             asio::connect(ws.next_layer(), results);
             ws.handshake(host, "/");
             std::thread(&Client::getter, this, host, in_port).detach();
@@ -129,32 +135,27 @@ private:
                 ws.write(asio::buffer(s));
                 });           
         }
-        catch (...)
-        {
+        catch (...) {
             message_handler("Error connect");
         }
     }
 
-    void getter(const std::string& host, const std::string& in_port)
-    {
+    void getter(const std::string& host, const std::string& in_port) {
         websocket::stream<tcp::socket> ws(ioc);
         tcp::resolver resolver(ioc);
         auto const results = resolver.resolve(host, in_port);
-        try
-        {
+        try {
             asio::connect(ws.next_layer(), results);
             ws.handshake(host, "/");
             std::string mesg_;
             beast::flat_buffer buffer;            
-            while (true)
-            {
+            while (true) {
                 ws.read(buffer);
                 message_handler(beast::buffers_to_string(buffer.data()));
                 buffer.consume(buffer.size());
             }
         }
-        catch (...)
-        {
+        catch (...) {
             message_handler("Read or connection error");
         }
     }
