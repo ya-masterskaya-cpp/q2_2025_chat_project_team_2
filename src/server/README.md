@@ -60,7 +60,7 @@ client->ask_rooms(); - запросить список комнат
 
 send_message("room", "message"); - отправить в комнату сообщение
 
-{"content":"message","room":"general","type":101} - пример сообщения, адресованного в комнату
+{"content":"message","room":"general","type":101,"user":"my_name"} - пример сообщения, адресованного в комнату от пользователя
 
 Список типов сообщений:
 
