@@ -186,7 +186,8 @@ private:
                         session->add(make_ok_answer(LEAVE_ROOM, s));
                     }
                     break;
-                case GENERAL:                
+                case GENERAL: 
+                    mes["user"] = name;
                     in_msg.add(mes);
                     break;
                 default:
