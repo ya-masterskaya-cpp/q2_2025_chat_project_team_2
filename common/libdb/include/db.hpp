@@ -3,86 +3,86 @@
 #include <vector>
 #include <sqlite3.h>
 
-struct User {
+namespace db {
+    struct User {
 
-    User(std::string login, std::string name, std::string password_hash, std::string role, bool is_deleted, int64_t unixtime) :
-        login(login), name(name), password_hash(password_hash), role(role), is_deleted(is_deleted), unixtime(unixtime) {}
+        User(std::string login, std::string name, std::string password_hash, std::string role, bool is_deleted, int64_t unixtime) :
+            login(login), name(name), password_hash(password_hash), role(role), is_deleted(is_deleted), unixtime(unixtime) {}
 
-    std::string login;
-    std::string name;
-    std::string password_hash;
-    std::string role;
-    bool is_deleted;
-    int64_t unixtime; //наносекунды
-};
+        std::string login;
+        std::string name;
+        std::string password_hash;
+        std::string role;
+        bool is_deleted;
+        int64_t unixtime; //наносекунды
+    };
 
-struct Message {
-    std::string message;
-    int64_t unixtimes; //наносекунды
-    std::string user_name;
-    std::string room;
-    std::string date;
-    std::string time;
-};
+    struct Message {
+        
+        Message(std::string message, int64_t unixtime, std::string user_login, std::string room):
+            message(message), unixtime(unixtime), user_login(user_login), room(room){}
+        
+        std::string message;
+        int64_t unixtime; //наносекунды
+        std::string user_login;
+        std::string room;
+    };
 
-class DB {
-public:
-    DB();
-    explicit DB(const std::string& db_file);
-    ~DB();
-    
-    // --- System ---
-    bool OpenDB();
-    void CloseDB();
-    //void ResetData();
-    std::string GetVersionDB(); //
+    class DB {
+    public:
+        DB();
+        explicit DB(const std::string& db_file);
+        ~DB();
 
-    // добавляет фейковые тестовые данные в БД: пользователей, комнаты, распределение пользователей по комнатам, сообщения в комнаты
-    bool InsertTestDataToBD();    // ДЛЯ ТЕСТОВ, УДАЛИТЬ В РЕЛИЗЕ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    bool DeleteDBFile();          // ДЛЯ ТЕСТОВ, УДАЛИТЬ В РЕЛИЗЕ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    bool RecreateDB();            // ДЛЯ ТЕСТОВ, УДАЛИТЬ В РЕЛИЗЕ !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
-    
-    // --- Users ---
-    bool CreateUser(const User& user); 
-    // нужно реализовать периодическую проверку и удаление пользователей с is_deleted = 1, если комнаты с ними удалились после удаления пользователя
-    bool SetUserForDelete(const std::string& user_login);
-    // если числится хоть в одной комнате, удаления не будет, только пометка is_deleted = 1, т.н. мягкое  удаление:
-    bool DeleteUser(const std::string& user_login); 
-    bool IsUser(const std::string& user_login);
-    std::vector<User> GetUsers();
-    // получение действующих пользователей (без пометки об удалении):
-    int64_t GetCountUsers(); 
-    std::vector<User> GetRoomUsers(const std::string& room);  
-    //int64_t GetCountRoomUsers(const std::string& room);
+        // --- System ---
+        bool OpenDB();
+        void CloseDB();
+        //void ResetData();
+        std::string GetVersionDB(); //
 
-    // --- Rooms ---
-    bool CreateRoom(const std::string& room, int64_t unixtime);
-    // при удалении комнаты в БД происходит автоматическое удаление из TABLE messages сообщений удаляемой комнаты:
-    bool DeleteRoom(const std::string& room);  
-    bool IsRoom(const std::string& room);
-    bool AddUserToRoom(const std::string& user_login, const std::string& room);
-    //bool IsUserAtRoom(const std::string& user_login, const std::string& room); 
-    // без удаления сообщений пользователя в комнате, только из TABLE user_rooms:
-    bool DeleteUserFromRoom(const std::string& user_login, const std::string& room); 
-    std::vector<std::string> GetRooms();
-    //int64_t GetCountRooms();
-    std::vector<std::string> GetUserRooms(const std::string& room); 
-    //int64_t GetCountUserRooms(const std::string& room);  //
+        // --- Users ---
+        bool CreateUser(const User& user);
+        // если числится хоть в одной комнате, удаления не будет, только пометка is_deleted = 1, т.н. мягкое  удаление:
+        bool DeleteUser(const std::string& user_login);
+        bool IsUser(const std::string& user_login);
+        bool IsAliveUser(const std::string& user_login);
+        std::vector<User> GetAllUsers();
+        std::vector<User> GetActiveUsers();
+        std::vector<User> GetDeletedUsers();
+        std::vector<std::string> GetUserRooms(const std::string& user_login);
 
-    // --- Messages ---
-    bool InsertMessageToRoom(const Message& message); //
-    // первые 50 сообщений (последние по времени создания):
-    std::vector<Message> GetRecentMessages(const std::string& room); 
-    // следующие 50 после временной метки unixtimes:
-    std::vector<Message> GetMessagesAfter(const std::string& room, int64_t unixtimes); 
+        // --- Rooms ---
+        bool CreateRoom(const std::string& room, int64_t unixtime);
+        // при удалении комнаты в БД происходит автоматическое удаление из TABLE messages сообщений удаляемой комнаты:
+        bool DeleteRoom(const std::string& room);
+        bool IsRoom(const std::string& room);
+        bool AddUserToRoom(const std::string& user_login, const std::string& room);
+        std::vector<User> GetRoomActiveUsers(const std::string& room);
+        // без удаления сообщений пользователя в комнате, только из TABLE user_rooms:
+        bool DeleteUserFromRoom(const std::string& user_login, const std::string& room);
+        std::vector<std::string> GetRooms();
 
-private:
-    sqlite3* db_ = nullptr;   
-    std::string db_filename_ = "chat.db";
+        // --- Messages ---
+        bool InsertMessageToDB(const Message& message); //
+        // первые 50 сообщений (последние по времени создания):
+        std::vector<Message> GetRecentMessagesRoom(const std::string& room);
+        // следующие 50 после временной метки unixtime:
+        std::vector<Message> GetMessagesRoomAfter(const std::string& room, int64_t unixtime);
+        int GetCountRoomMessages(const std::string& room);
 
-    bool InitSchema();
-    std::vector<User> GetUsersBySQL(const char* sql_query);
-    bool PerformSQLReturnBool(const char* sql_query, std::vector<std::string> param);
+    private:
+        sqlite3* db_ = nullptr;
+        std::string db_filename_ = "chat.db";
+
+        bool InitSchema();
+        std::vector<User> GetUsersBySQL(const char* sql_query);
+        bool SetUserForDelete(const std::string& user_login);
+        bool PerformSQLReturnBool(const char* sql_query, std::vector<std::string> param);
         // окончательное  удаление пользователей помеченных как удаленные, если нет комнат с пользователем, удаляем его из БД
-    bool DelDeletedUsersWithoutRoom(); 
-};
+        bool DelDeletedUsersWithoutRoom();
+        std::vector<User> GetUsers(const char* sql);
+        std::vector<Message> GetMessagesRoom(const std::string& room, int64_t unixtime = -1);
+
+    };
+} // db
+
