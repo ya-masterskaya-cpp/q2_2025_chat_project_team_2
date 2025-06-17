@@ -24,7 +24,7 @@ class ListSelectionDialog : public wxDialog {
 public:
     ListSelectionDialog(wxWindow* parent,
         const wxString& title,
-        const std::vector<wxString>& items,
+        const std::vector<std::string>& items,
         const std::set<wxString>& existing_items);
 
     wxString GetSelectedItem() const { return list_box_->GetStringSelection(); }

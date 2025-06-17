@@ -68,9 +68,14 @@ private:
     void OnTabChanged(wxNotebookEvent& event);
     void OnClose(wxCloseEvent& event);
     void AddMessage(const IncomingMessage& msg);
-    void CreateRoom(const std::string& room_name);
+
     void ApplyTextStyle(const wxTextAttr& attr);
     void OnTextChanged(wxCommandEvent& event);
+
+    void UpdateRoomList(const std::vector<std::string>& rooms);
+    void CreateRoom(bool success, const std::string& room_name);
+    void EnterRoom(bool success, const std::string& room_name);
+    void LeaveRoom(bool success, const std::string& room_name);
 
     wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl);
     int CountUsefulChars(const wxString& text) const;

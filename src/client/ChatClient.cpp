@@ -35,19 +35,30 @@ namespace client {
         // Регистрация пользователя
         network_client_->register_user(username, password);
 
-        //network_client_ = std::make_unique<Client>();
-        //network_client_->set_handler([this](const std::string& json_msg) {
-        //    HandleNetworkMessage(json_msg);
-        //    });
-
-        //// Подключение к серверу
-        //network_client_->start(server, "9003", "9002");
-        //network_client_->register_user(username, password);
     }
 
 void ChatClient::SetMessageHandler(MessageHandler handler) {
     std::cout << "[ChatClient] Setting message handler\n";
-    message_handler_ = handler;
+    message_handler_ = std::move(handler);
+}
+
+void ChatClient::SetRoomListHandler(RoomListHandler handler) {
+    std::cout << "[ChatClient] Setting room list handler\n";
+    room_list_handler_ = std::move(handler);
+}
+
+void ChatClient::SetRoomCreateHandler(RoomCreateHandler handler) {
+    std::cout << "[ChatClient] Setting room create handler\n";
+    room_create_handler_ = std::move(handler);
+}
+
+void ChatClient::SetRoomEnterHandler(RoomEnterHandler handler) {
+    std::cout << "[ChatClient] Setting room enter handler\n";
+    room_enter_handler_ = std::move(handler);
+}
+void ChatClient::SetRoomExitHandler(RoomExitHandler handler) {
+    std::cout << "[ChatClient] Setting room leave handler\n";
+    room_exit_handler_ = std::move(handler);
 }
 
 void ChatClient::SendMessageToServer(const OutgoingMessage& msg) {
@@ -63,16 +74,7 @@ void ChatClient::ChangeUsername(const std::string& new_username) {
 }
 
 void ChatClient::LeaveRoom(const std::string& room_name) {
-    // Эмуляция - сервер подтвердил выход из комнаты
-    IncomingMessage sys_msg;
-    sys_msg.sender = SYSTEM_SENDER_NAME;
-    sys_msg.room = room_name;
-    sys_msg.text = "Вы покинули комнату '" + room_name + "'";
-    sys_msg.timestamp = std::chrono::system_clock::now();
-
-    if (message_handler_) {
-        message_handler_(sys_msg);
-    }
+    network_client_->leave_room(room_name);
 }
 
 void ChatClient::JoinRoom(const std::string& room_name) {
@@ -102,17 +104,13 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
 
         // Обработка приветственного сообщения
         if (type == GENERAL) {
-            // Для приветственного сообщения сервера
-            if (j.contains("content")) {
-                msg.sender = SYSTEM_SENDER_NAME;
-                msg.room = MAIN_ROOM_NAME;
-                msg.text = j["content"].get<std::string>();
-            }
-            // Для обычных сообщений
-            else if (j.contains("sender") && j.contains("room") && j.contains("content")) {
-                msg.sender = j["sender"].get<std::string>();
+            // Используем комнату из сообщения
+            msg.room = j.value("room", MAIN_ROOM_NAME); // Основное исправление
+
+            if (j.contains("content") && j.contains("room") && j.contains("user")) {
+                msg.sender = j["user"].get<std::string>();
                 msg.room = j["room"].get<std::string>();
-                msg.text = j["content"].get<std::string>();
+                msg.text = j["content"].get<std::string>();      
             }
             else {
                 throw std::runtime_error("Invalid GENERAL message format");
@@ -123,8 +121,7 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
             }
         }
         // Обработка ответов сервера
-        else if (type == LOGIN || type == CHANGE_NAME ||
-            type == CREATE_ROOM || type == ENTER_ROOM) {
+        else if (type == LOGIN || type == CHANGE_NAME) {
 
             msg.sender = SYSTEM_SENDER_NAME;
             msg.room = MAIN_ROOM_NAME;
@@ -152,26 +149,63 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
                     msg.text = "Ошибка смены имени: " + what;
                 }
                 break;
-
-            case CREATE_ROOM:
-                msg.text = (answer == "OK")
-                    ? "Комната создана: " + what
-                    : "Ошибка создания комнаты: " + what;
-                break;
-
-            case ENTER_ROOM:
-                msg.text = (answer == "OK")
-                    ? "Вы вошли в комнату: " + what
-                    : "Ошибка входа в комнату: " + what;
-                break;
             }
 
             if (message_handler_) {
                 message_handler_(msg);
             }
         }
+        else if (type == ENTER_ROOM) {
+            std::cout << "[ENTER ROOM result]: " << j["answer"] << '\n';
+            if (room_enter_handler_) {
+                bool success;
+                std::string message = j["what"].get<std::string>();
+                if (j["answer"] == "OK") {
+                    success = true;
+                }
+                else {
+                    success = false;
+                }
+                room_enter_handler_(success, message);
+            }
+        }
+        else if (type == LEAVE_ROOM) {
+            std::cout << "[LEAVE ROOM result]: " << j["answer"] << '\n';
+            if (room_enter_handler_) {
+                bool success;
+                std::string message = j["what"].get<std::string>();
+                if (j["answer"] == "OK") {
+                    success = true;
+                }
+                else {
+                    success = false;
+                }
+                room_exit_handler_(success, message);
+            }
+        }
+        else if (type == CREATE_ROOM) {
+            std::cout << "[ROOM result]: " << j["answer"] << '\n';
+            if (room_create_handler_) {
+                bool success;
+                std::string message = j["what"].get<std::string>();
+                if (j["answer"] == "OK") {
+                    success = true;
+                }
+                else {
+                    success = false;
+                }
+                room_create_handler_(success, message);
+            }
+        }
         else if (type == ASK_ROOMS) {
-            // Обработка списка комнат (пока пропустим)
+            std::cout << "[ROOMS parse for]: " << j << '\n';
+            if (room_list_handler_ && j.contains("rooms")) {
+                std::vector<std::string> rooms;
+                for (const auto& room : j["rooms"]) {
+                    rooms.push_back(room);
+                }
+                room_list_handler_(rooms);
+            }
         }
         else {
             std::cerr << "[Network] Unknown message type: " << type << "\n";
