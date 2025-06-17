@@ -131,14 +131,19 @@ private:
                 {
                 case LOGIN:
                     name = mes["user"];
-                    users_[name].insert(session);
-                    users_["general"].insert(session);
-                    session->add(make_ok_answer(LOGIN,name));
+                    if (users_.count(name)) {
+                        session->add(make_err_answer(LOGIN, name, "user exists"));
+                    }
+                    else {
+                        users_[name].insert(session);
+                        users_["general"].insert(session);
+                        session->add(make_ok_answer(LOGIN, name));
+                    }
                     break;
                 case CHANGE_NAME:
                     s = mes["name"];
                     if (users_.count(s)) {
-                        session->add(make_err_answer(CHANGE_NAME, s));
+                        session->add(make_err_answer(CHANGE_NAME, s, "name exists"));
                     }
                     else {                       
                         users_.erase(name);
@@ -150,7 +155,7 @@ private:
                 case CREATE_ROOM:
                     s = mes["room"];
                     if (users_.count(s)) {
-                        session->add(make_err_answer(CREATE_ROOM, s));
+                        session->add(make_err_answer(CREATE_ROOM, s, "room exists"));
                     }
                     else {
                         users_[s].insert(session);                        
@@ -160,10 +165,12 @@ private:
                 case ENTER_ROOM:
                     s = mes["room"];
                     if (!users_.count(s))  {
-                        session->add(make_err_answer(ENTER_ROOM, s));
+                        session->add(make_err_answer(ENTER_ROOM, s, "room does not eixist"));
                     }
-                    else { 
-                        users_[s].insert(session);                        
+                    else if (!users_[s].insert(session).second) {
+                        session->add(make_err_answer(ENTER_ROOM, s, "user already entered"));
+                    }
+                    else {                       
                         session->add(make_ok_answer(ENTER_ROOM, s));
                     }
                     break;
@@ -179,10 +186,12 @@ private:
                 case LEAVE_ROOM:
                     s = mes["room"];
                     if (!users_.count(s)) {
-                        session->add(make_err_answer(LEAVE_ROOM, s));
+                        session->add(make_err_answer(LEAVE_ROOM, s, "room does not exist"));
+                    }
+                    else if (!users_[s].erase(session)) {
+                        session->add(make_err_answer(LEAVE_ROOM, s, "user is not in the room"));
                     }
                     else {
-                        users_[s].erase(session);
                         session->add(make_ok_answer(LEAVE_ROOM, s));
                     }
                     break;
@@ -229,8 +238,9 @@ private:
         return MesBuilder(type).add("what", what).add("answer", "OK").j;
     }
 
-    nlohmann::json make_err_answer(int type, const std::string& what) {
-        return MesBuilder(type).add("what", what).add("answer", "err").j;
+    nlohmann::json make_err_answer(int type, const std::string& what,
+        const std::string& reason = "") {
+        return MesBuilder(type).add("what", what).add("answer", "err").add("reason",reason).j;
     }
 
     void remove_user(MsgQueue* session) {
