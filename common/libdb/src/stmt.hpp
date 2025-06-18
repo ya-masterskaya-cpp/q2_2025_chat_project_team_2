@@ -42,8 +42,8 @@ public:
         sqlite3_bind_int64(stmt_, index, value);
     }
 
-    std::string GetColumnText(sqlite3_stmt* stmt, int col) {
-        const char* text = reinterpret_cast<const char*>(sqlite3_column_text(stmt, col));
+    std::string GetColumnText(int col) {
+        const char* text = reinterpret_cast<const char*>(sqlite3_column_text(stmt_, col));
         return text ? text : "";
     }
 

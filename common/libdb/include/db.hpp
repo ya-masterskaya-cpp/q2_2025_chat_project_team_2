@@ -37,8 +37,7 @@ namespace db {
         // --- System ---
         bool OpenDB();
         void CloseDB();
-        //void ResetData();
-        std::string GetVersionDB(); //
+        std::string GetVersionDB();
 
         // --- Users ---
         bool CreateUser(const User& user);
@@ -75,14 +74,11 @@ namespace db {
         std::string db_filename_ = "chat.db";
 
         bool InitSchema();
-        std::vector<User> GetUsersBySQL(const char* sql_query);
         bool SetUserForDelete(const std::string& user_login);
         bool PerformSQLReturnBool(const char* sql_query, std::vector<std::string> param);
         // окончательное  удаление пользователей помеченных как удаленные, если нет комнат с пользователем, удаляем его из БД
         bool DelDeletedUsersWithoutRoom();
         std::vector<User> GetUsers(const char* sql);
-        std::vector<Message> GetMessagesRoom(const std::string& room, int64_t unixtime = -1);
-
     };
 } // db
 

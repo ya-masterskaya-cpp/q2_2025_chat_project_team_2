@@ -12,11 +12,11 @@ namespace utime {
     }
     
     inline std::pair<std::string, std::string> UnixTimeToDateTime(int64_t unix_time_ns) {
-        // Переводим наносекунды в секунды
+        // С•РµСЂРµРІРѕРґРёРј РЅР°РЅРѕСЃРµРєСѓРЅРґС‹ РІ СЃРµРєСѓРЅРґС‹
         std::time_t t = static_cast<time_t>(unix_time_ns / 1'000'000'000);
-        std::tm tm = *std::localtime(&t);  // Локальное время
+        std::tm tm = *std::localtime(&t);  // Р‹РѕРєР°Р»СЊРЅРѕРµ РІСЂРµРјВ¤
 
-        // Форматируем строки
+        // вЂРѕСЂРјР°С‚РёСЂСѓРµРј СЃС‚СЂРѕРєРё
         char date_buf[11], time_buf[9];
         strftime(date_buf, sizeof(date_buf), "%Y-%m-%d", &tm);  // "2023-11-15"
         strftime(time_buf, sizeof(time_buf), "%H:%M:%S", &tm);  // "14:30:45"
