@@ -137,8 +137,8 @@ void LoginDialog::OnLogin(wxCommandEvent& event) {
 
     //для теста передаем данные в главное окно
     wxString message = wxString::Format(
-        "Выбран сервер: %s,\t Логин: %s\t, Хэш пароля: %s",
-        GetServer(),GetUsername(),ssl::HashPassword(GetPassword().ToStdString())
+        "Вы успешно авторизованы на сервере: %s,\t под логином: %s\t",
+        GetServer(),GetUsername()
     );
 
     wxMessageBox(message, "Данные авторизации", wxOK | wxICON_INFORMATION);

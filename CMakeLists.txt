@@ -13,6 +13,9 @@ find_package(SQLite3 REQUIRED CONFIG)
 find_package(OpenSSL REQUIRED CONFIG) 
 find_package(nlohmann_json REQUIRED)
 
+# для работы с базой данных
+add_subdirectory(common/libdb)
+
 # дополнительные структуры
 add_library(add_struct INTERFACE 
 	common/add_struct/add_struct.h
@@ -36,16 +39,6 @@ target_include_directories(SSL_Lib PUBLIC
 )
 target_link_libraries(SSL_Lib PUBLIC openssl::openssl)
 
-# для работы с базой данных
-add_library(DatabaseLib STATIC 
-	common/database/database.h
-	common/database/database.cpp
-)
-target_include_directories(DatabaseLib PUBLIC 
-    ${PROJECT_SOURCE_DIR}/common/database
-)
-target_link_libraries(DatabaseLib PUBLIC SQLite::SQLite3)
-
 # для работы с client_logic
 add_library(ClientLogicLib STATIC 
 	src/client/ChatClient.h
@@ -60,6 +53,7 @@ target_link_libraries(ClientLogicLib PUBLIC
 	add_struct
 	Boost::system
 	nlohmann_json::nlohmann_json
+	libdb
 )
 
 # для работы с gui
@@ -79,7 +73,6 @@ target_include_directories(GUILib PUBLIC
     ${PROJECT_SOURCE_DIR}/common/gui
 )
 target_link_libraries(GUILib PUBLIC 
-	DatabaseLib 
 	wxWidgets::wxWidgets 
 	ClientLogicLib
 )

@@ -1,21 +1,9 @@
 cmake_minimum_required(VERSION 3.15)
 project(libdb LANGUAGES C CXX)
 
-set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# Автоматическая загрузка Conan toolchain (если файл существует) 
-# и при запуске cmake не указали ключ  -DCMAKE_TOOLCHAIN_FILE=build/conan_toolchain.cmake
-if(NOT CMAKE_TOOLCHAIN_FILE AND EXISTS "${CMAKE_CURRENT_BINARY_DIR}/conan_toolchain.cmake")
-    message(STATUS "Auto-detected Conan toolchain")
-    include(${CMAKE_CURRENT_BINARY_DIR}/conan_toolchain.cmake)
-endif()
-
-# Добавление путей Conan generators
-if(EXISTS "${CMAKE_CURRENT_BINARY_DIR}/generators")
-    list(APPEND CMAKE_PREFIX_PATH "${CMAKE_CURRENT_BINARY_DIR}/generators")
-endif()
 
 message(STATUS "Conan toolchain: ${CMAKE_TOOLCHAIN_FILE}")
 message(STATUS "Conan generators path: ${CMAKE_PREFIX_PATH}")

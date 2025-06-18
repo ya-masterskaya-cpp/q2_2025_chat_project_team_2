@@ -413,14 +413,6 @@ void MainWindow::OnChangedUserName(wxCommandEvent& event) {
             //Эмуляция запроса на сервер
             client_->ChangeUsername(new_name.ToStdString());
             current_username_ = new_name.ToStdString();
-
-            // Системное уведомление
-            IncomingMessage sys_msg;
-            sys_msg.sender = SYSTEM_SENDER_NAME;
-            sys_msg.room = MAIN_ROOM_NAME;
-            sys_msg.text = "Имя пользователя изменено на '" + current_username_ + "'";
-            sys_msg.timestamp = std::chrono::system_clock::now();
-            AddMessage(sys_msg);
         }
     }
 }

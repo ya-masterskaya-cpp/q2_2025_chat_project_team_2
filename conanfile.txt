@@ -1,9 +1,11 @@
 [requires]
 boost/1.88.0
 wxwidgets/3.2.6
-sqlite3/3.42.0
 openssl/3.4.1
 nlohmann_json/3.12.0
+sqlite3/3.49.1
+spdlog/1.15.3
+catch2/3.8.1 
 
 [generators]
 CMakeToolchain
