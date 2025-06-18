@@ -44,35 +44,100 @@ struct Message {
 
 #### 1. Управление подключением
 - `OpenDB()` – открывает соединение с БД, инициализирует схему (если БД новая).
+``` cpp
+      bool OpenDB();
+```
 - `CloseDB()` – закрывает соединение.
+``` cpp
+      void CloseDB();
+```
 - `GetVersionDB()` - возвращает внутренний номер версии БД.
+``` cpp
+      td::string GetVersionDB();
+```
 
 #### 2. Управление пользователями
 - `CreateUser(user)` – добавляет пользователя.
+``` cpp
+      bool CreateUser(const User& user);
+```
 - `DeleteUser(login)` – удаляет пользователя, если он не состоит в комнатах (иначе только is_deleted = true).
+``` cpp
+      bool DeleteUser(const std::string& user_login);
+```
 - `IsUser(login)` – проверяет существование пользователя.
+``` cpp
+      bool IsUser(const std::string& user_login);
+```
 - `IsAliveUser(login)` – проверяет, что пользователь существует и не помечен на удаление.
+``` cpp
+      bool IsAliveUser(const std::string& user_login);
+```
 - `GetAllUsers()` – возвращает всех пользователей (включая удаленных).
+``` cpp
+      std::vector<User> GetAllUsers();
+```
 - `GetActiveUsers()` – возвращает только активных (is_deleted = false).
+``` cpp
+      std::vector<User> GetActiveUsers();
+```
 - `GetDeletedUsers()` – возвращает удаленных (is_deleted = true).
-
+``` cpp
+      std::vector<User> GetDeletedUsers();
+```
 #### 3. Управление комнатами
 - `CreateRoom(room, unixtime)` – создает комнату.
+``` cpp
+      bool CreateRoom(const std::string& room, int64_t unixtime);
+```
 - `DeleteRoom(room)` – удаляет комнату, сообщения комнаты из БД и связи пользователей с конатой.
+``` cpp
+      bool DeleteRoom(const std::string& room);
+```
 - `IsRoom(room)` – проверяет существование комнаты.
+``` cpp
+      bool IsRoom(const std::string& room);
+```
 - `GetRooms()` – возвращает список всех комнат.
+``` cpp
+      std::vector<std::string> GetRooms();
+```
 
 #### 4. Связи пользователей и комнат
 - `AddUserToRoom(login, room)` – добавляет пользователя в комнату.
+``` cpp
+      bool AddUserToRoom(const std::string& user_login, const std::string& room);
+```
 - `DeleteUserFromRoom(login, room)` – удаляет пользователя из комнаты.
+``` cpp
+      bool DeleteUserFromRoom(const std::string& user_login, const std::string& room);
+```
 - `GetUserRooms(login)` – возвращает комнаты пользователя.
+``` cpp
+      std::vector<std::string> GetUserRooms(const std::string& user_login);
+```
 - `GetRoomActiveUsers(room)` – возвращает активных пользователей комнаты.
+``` cpp
+      std::vector<User> GetRoomActiveUsers(const std::string& room);
+```
 
 #### 5. Управление сообщениями
 - `InsertMessageToDB(message)` – добавляет сообщение в комнату.
+``` cpp
+      bool InsertMessageToDB(const Message& message);
+```
 - `GetRecentMessagesRoom(room)` – возвращает 50 последних сообщений.
+``` cpp
+      std::vector<Message> GetRecentMessagesRoom(const std::string& room);
+```
 - `GetMessagesRoomAfter(room, unixtime)` – возвращает 50 сообщений, начиная с указанного времени (пагинация).
+``` cpp
+      std::vector<Message> GetMessagesRoomAfter(const std::string& room, int64_t unixtime);
+```
 - `GetCountRoomMessages(room)` – возвращает количество сообщений в комнате.
+``` cpp
+      int GetCountRoomMessages(const std::string& room);
+```
 
 ### Структура таблиц БД
 
