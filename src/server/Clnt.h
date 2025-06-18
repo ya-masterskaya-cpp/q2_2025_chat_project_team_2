@@ -1,3 +1,4 @@
+/*
 #pragma once
 
 #include "General.h"
@@ -31,5 +32,5 @@ private:
     std::vector<std::thread> threads;
     MessageHandler message_handler;   
 };
-
+*/
 
