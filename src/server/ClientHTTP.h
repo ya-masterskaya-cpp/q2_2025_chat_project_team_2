@@ -10,6 +10,7 @@
 #include <mutex>
 #include <condition_variable>
 #include <thread>
+#include "General.h"
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -19,14 +20,6 @@ using tcp = asio::ip::tcp;
 const std::string def_host = "127.0.0.1";
 const std::string def_in_port = "9003";
 const std::string def_out_port = "9002";
-
-const int GENERAL = 101;
-const int LOGIN = 111;
-const int CHANGE_NAME = 112;
-const int CREATE_ROOM = 113;
-const int ENTER_ROOM = 114;
-const int ASK_ROOMS = 115;
-const int LEAVE_ROOM = 116;
 
 struct MesQueue
 {
