@@ -11,20 +11,14 @@
 #include <vector>
 #include "json.h"
 #include <unordered_set>
+#include "General.h"
+#include "Logger.h"
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace websocket = beast::websocket;
 using tcp = asio::ip::tcp;
-
-const int GENERAL = 101;
-const int LOGIN = 111;
-const int CHANGE_NAME = 112;
-const int CREATE_ROOM = 113;
-const int ENTER_ROOM = 114;
-const int ASK_ROOMS = 115;
-const int LEAVE_ROOM = 116;
 
 struct MsgQueue
 {
@@ -91,6 +85,7 @@ class Server
 {
 public:
     void run_server() {
+        logger_.logEvent("Server started");
         std::thread(&Server::shuttle, this).detach();
         std::thread(&Server::client_accept, this).detach();
         std::string s;
@@ -100,6 +95,7 @@ public:
                 break;
             }
         }
+        logger_.logEvent("Server stopped");
     }
 private:    
     void sender(tcp::socket socket, MsgQueue* session) {
@@ -108,20 +104,21 @@ private:
         ws.write(asio::buffer(
             MesBuilder(GENERAL).add("content","hello").toString()
         ));
+        logger_.logEvent("New client accepted");
         session->wait_on_queue([&](const nlohmann::json& j) {
             ws.write(asio::buffer(j.dump())); });
     }
 
     void getter(tcp::socket socket, MsgQueue* session) {
+        std::string name;
+        std::string s;
+        nlohmann::json mes;
+        std::vector<std::string> v;
+        int type;
         try {
             websocket::stream<tcp::socket> ws(std::move(socket));
             ws.accept();
             beast::flat_buffer buffer;
-            std::string name;
-            std::string s;
-            nlohmann::json mes;
-            std::vector<std::string> v;
-            int type;
             while (true)
             {
                 ws.read(buffer);
@@ -132,22 +129,24 @@ private:
                 case LOGIN:
                     name = mes["user"];
                     if (users_.count(name)) {
-                        session->add(make_err_answer(LOGIN, name, "user exists"));
+                        session->add(make_err_answer(LOGIN, name, USER_EXISTS));
                     }
                     else {
                         users_[name].insert(session);
                         users_["general"].insert(session);
                         session->add(make_ok_answer(LOGIN, name));
+                        logger_.logEvent("Client " + name + " logged");
                     }
                     break;
                 case CHANGE_NAME:
                     s = mes["name"];
                     if (users_.count(s)) {
-                        session->add(make_err_answer(CHANGE_NAME, s, "name exists"));
+                        session->add(make_err_answer(CHANGE_NAME, s, NAME_EXISTS));
                     }
                     else {                       
                         users_.erase(name);
                         users_[s].insert(session);
+                        logger_.logEvent("Client " + name + " changed name to " + s);
                         name = s;
                         session->add(make_ok_answer(CHANGE_NAME, s));
                     }
@@ -155,23 +154,25 @@ private:
                 case CREATE_ROOM:
                     s = mes["room"];
                     if (users_.count(s)) {
-                        session->add(make_err_answer(CREATE_ROOM, s, "room exists"));
+                        session->add(make_err_answer(CREATE_ROOM, s, ROOM_EXISTS));
                     }
                     else {
                         users_[s].insert(session);                        
                         session->add(make_ok_answer(CREATE_ROOM, s));
+                        logger_.logEvent("Client " + name + " created room " + s);
                     }
                     break;
                 case ENTER_ROOM:
                     s = mes["room"];
                     if (!users_.count(s))  {
-                        session->add(make_err_answer(ENTER_ROOM, s, "room does not eixist"));
+                        session->add(make_err_answer(ENTER_ROOM, s, NO_ROOM));
                     }
                     else if (!users_[s].insert(session).second) {
-                        session->add(make_err_answer(ENTER_ROOM, s, "user already entered"));
+                        session->add(make_err_answer(ENTER_ROOM, s, ENTER_TWICE));
                     }
                     else {                       
                         session->add(make_ok_answer(ENTER_ROOM, s));
+                        logger_.logEvent("Client " + name + " entered room " + s);
                     }
                     break;
                 case ASK_ROOMS:
@@ -186,13 +187,14 @@ private:
                 case LEAVE_ROOM:
                     s = mes["room"];
                     if (!users_.count(s)) {
-                        session->add(make_err_answer(LEAVE_ROOM, s, "room does not exist"));
+                        session->add(make_err_answer(LEAVE_ROOM, s, NO_ROOM));
                     }
                     else if (!users_[s].erase(session)) {
-                        session->add(make_err_answer(LEAVE_ROOM, s, "user is not in the room"));
+                        session->add(make_err_answer(LEAVE_ROOM, s, LEAVE_TWICE));
                     }
                     else {
                         session->add(make_ok_answer(LEAVE_ROOM, s));
+                        logger_.logEvent("Client " + name + " left room " + s);
                     }
                     break;
                 case GENERAL: 
@@ -207,7 +209,7 @@ private:
         }
         catch (...) {
             session->validate(false);
-            std::cout << "Read error" << std::endl;
+            logger_.logError("Client " + name + " disconnected");
         }
     }
     
@@ -255,6 +257,7 @@ private:
     asio::io_context ioc;
     MsgQueue in_msg; 
     RoomSessions users_;
+    Logger logger_;
 };
 
 int main() {
