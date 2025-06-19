@@ -6,7 +6,16 @@ namespace gui {
 RegisterDialog::RegisterDialog(wxWindow* parent, const std::string& selected_sever) :
     wxDialog(parent, wxID_ANY, "Регистрация пользователя", wxDefaultPosition, wxSize(400,300)),
     server_(selected_sever){
+    
     ConstructInterface();
+
+    network_client_ = std::make_unique<Client>();
+    network_client_->set_handler([this](const std::string& msg) {
+        CallAfter([this, msg] {
+            HandleNetworkMessage(msg);
+            });
+        });
+    network_client_->start(server_, CLIENT_FIRST_PORT, CLIENT_SECOND_PORT);
 }
 
 void RegisterDialog::ConstructInterface() {
@@ -14,7 +23,7 @@ void RegisterDialog::ConstructInterface() {
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
     //Установка шрифта по умолчанию
-    SetFont(DEFAULT_FONT);
+    this->SetFont(DEFAULT_FONT);
 
     // Добавляем информацию о сервере
     wxStaticText* server_info = new wxStaticText(
@@ -73,33 +82,74 @@ void RegisterDialog::OnRegister(wxCommandEvent& event) {
         return;
     }
 
-    //Эмуляция запроса к серверу
     wxString username = GetUsername();
+    std::string sended_username = "@" + username.ToStdString();
     wxString password_hash = ssl::HashPassword(GetPassword().ToStdString());
 
-    //Эмуляция ответа от сервера
-    enum Responce {OK, NAME_ERROR, CONNECT_ERROR};
-    Responce server_responce = rand() % 10 < 8 ? OK : (rand() % 2 ? NAME_ERROR : CONNECT_ERROR);
-
-    switch (server_responce)
-    {
-    case OK:
-        wxMessageBox("Регистрация прошла успешно!", "Успех", wxICON_INFORMATION);
-        EndModal(wxID_OK);
-        break;
-    case NAME_ERROR:
-        wxMessageBox("Пользователь с таким именем уже существует", "Ошибка", wxICON_ERROR);
-        break;
-    case CONNECT_ERROR:
-        wxMessageBox("Невозможно подключиться к серверу", "Ошибка", wxICON_ERROR);
-        break;
-    default:
-        break;
-    }
+    network_client_->register_user(sended_username, password_hash.ToStdString());
+    std::cout << "[REGISTER] send user: " << username << " and pass: " << password_hash << '\n';
 }
 
 void RegisterDialog::onCancel(wxCommandEvent& event) {
     EndModal(wxID_CANCEL);
 }
+
+void RegisterDialog::HandleNetworkMessage(const std::string& json_msg) {
+    std::cout << "[REGISTER] Received: " << json_msg << "\n";
+
+    try {
+        auto j = nlohmann::json::parse(json_msg);
+
+        // Добавляем вывод для диагностики
+        std::cout << "[Network] Handling message: " << j.dump() << "\n";
+
+        if (!j.contains("type")) {
+            throw std::runtime_error("Missing 'type' field");
+        }
+
+        int type = j["type"];
+        IncomingMessage msg;
+        msg.timestamp = std::chrono::system_clock::now();
+
+        // Обработка приветственного сообщения
+        if (type == GENERAL) {
+            if (j.contains("content") && !j.contains("room") && !j.contains("user")) {
+                std::cout << "[Message] Handling message: " << j["content"].get<std::string>() << "\n";
+            }
+            else {
+                throw std::runtime_error("Invalid GENERAL message format");
+            }
+        }
+        // Обработка ответов сервера
+        else if (type == REGISTER) {
+
+            if (!j.contains("answer") || !j.contains("what")) {
+                throw std::runtime_error("Missing fields in server response");
+            }
+
+            std::string answer = j["answer"].get<std::string>();
+            std::string text_register_ = j["what"].get<std::string>();
+
+            if (answer == "OK") {
+                wxMessageBox("Регистрация прошла успешно!", "Успех", wxICON_INFORMATION);
+                EndModal(wxID_OK);
+            }
+            else if(answer == "err" && j.contains("reason") && j["reason"] == "login exists") {
+                wxMessageBox("Пользователь с таким именем уже существует", "Ошибка", wxICON_ERROR);
+            }
+            else {
+                wxMessageBox("Невозможно подключиться к серверу", "Ошибка", wxICON_ERROR);
+            }
+        }
+        else {
+            std::cerr << "[Network] Unknown message type: " << type << "\n";
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[Network] Error handling message: " << e.what() << "\n";
+    }
+}
+
+
 
 }//end namespace gui

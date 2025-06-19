@@ -18,16 +18,20 @@ public:
 
     void AddMessage(const IncomingMessage& msg);
     void Clear();
+    const std::string& GetRoomName() const { return room_name_; }
+    void SetRoomName(const std::string& name) { room_name_ = name; }
 
 private:
     wxRichTextCtrl* display_field_;
+    std::string room_name_;
 
     void ParseBBCode(const wxString& text);
 };
 
 class MainWindow : public wxFrame {
 public:
-    MainWindow(std::unique_ptr<client::ChatClient> client);
+    MainWindow(std::unique_ptr<client::ChatClient> client, 
+        const std::string username, const std::string& hash_password);
 
 private:
     std::unique_ptr<client::ChatClient> client_;
@@ -36,7 +40,12 @@ private:
     std::map<std::string, ChatRoomPanel*> rooms_;
     wxFont default_font_;
     wxStaticText* message_length_label_;
-    std::string current_username_; //колхоз пока нет сервера тут будет локальное имя пользователя
+    std::string current_username_;
+    std::string hash_password_;
+
+    //списки пользователей
+    wxListBox* users_listbox_;
+    wxStaticText* room_users_label_;
 
     //UI кнопки управления
     wxButton* send_message_button_;
@@ -69,16 +78,24 @@ private:
     void OnClose(wxCloseEvent& event);
     void AddMessage(const IncomingMessage& msg);
 
+    void UpdateRoomUsers(const std::string& room_name, const std::set<std::string>& users);
+    void UpdateInterfaceAfterChangedName(const std::string& old_name, const std::string& new_name);
+
     void ApplyTextStyle(const wxTextAttr& attr);
     void OnTextChanged(wxCommandEvent& event);
 
-    void UpdateRoomList(const std::vector<std::string>& rooms);
+    void OnUserListRightClick(wxContextMenuEvent& event);
+    void CreatePrivateChat(const wxString& username);
+
+    void UpdateRoomList(const std::set<std::string>& rooms);
     void CreateRoom(bool success, const std::string& room_name);
     void EnterRoom(bool success, const std::string& room_name);
     void LeaveRoom(bool success, const std::string& room_name);
+    void ChangeName(bool success, const std::string& room_name);
 
     wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl);
     int CountUsefulChars(const wxString& text) const;
+    bool IsPrivateRoom(const std::string& name) const;
 };
 
 }//end namespace gui

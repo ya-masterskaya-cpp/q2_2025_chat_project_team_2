@@ -10,7 +10,7 @@
 namespace gui{
 
 ChatRoomPanel::ChatRoomPanel(wxWindow* parent, const std::string& room_name) :
-    wxPanel(parent) {
+    wxPanel(parent), room_name_(room_name) {
     wxBoxSizer* sizer = new wxBoxSizer(wxVERTICAL);
 
     display_field_ = new wxRichTextCtrl(this, wxID_ANY, "",
@@ -83,20 +83,20 @@ void ChatRoomPanel::ParseBBCode(const wxString& text) {
     bbcode::ParseBBCode(text, display_field_);
 }
 
-MainWindow::MainWindow(std::unique_ptr<client::ChatClient> client) :
+MainWindow::MainWindow(std::unique_ptr<client::ChatClient> client,
+    const std::string username, const std::string& hash_password) :
     wxFrame(nullptr, wxID_ANY, "Чат клиента",wxDefaultPosition, wxSize(800,600)), 
     client_(std::move(client)),
     default_font_(DEFAULT_SERVER),
-    current_username_(client_->GetUsername()) //пока оставляем костыль, потом изменить
+    current_username_(username),
+    hash_password_(hash_password)
     {
     ConstructInterface();
-    //CreateRoom(true,MAIN_ROOM_NAME);
+    client_->LoginUser(current_username_, hash_password_);
+    client_->RequestUsersForRoom(MAIN_ROOM_NAME);
 }
 
 void MainWindow::ConstructInterface() {
-
-    // Получаем имя пользователя
-        current_username_ = client_->GetUsername();
 
     // Защита на случай пустого имени
     if (current_username_.empty()) {
@@ -120,7 +120,28 @@ void MainWindow::ConstructInterface() {
     room_notebook_ = new wxNotebook(main_panel, wxID_ANY);
     // Минимальная высота 300px
     room_notebook_->SetMinSize(wxSize(-1, 300));
-    main_sizer->Add(room_notebook_, 1, wxEXPAND | wxALL, 5);
+
+    //список пользователей
+    wxBoxSizer* content_sizer = new wxBoxSizer(wxHORIZONTAL);
+    content_sizer->Add(room_notebook_, 1, wxEXPAND | wxRIGHT, 5);
+
+    // Вертикальный контейнер для списка пользователей
+    wxBoxSizer* users_sizer = new wxBoxSizer(wxVERTICAL);
+
+    // Заголовок с именем комнаты
+    room_users_label_ = new wxStaticText(main_panel, wxID_ANY,
+        "Пользователи комнаты:");
+    room_users_label_->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT,
+        wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
+    users_sizer->Add(room_users_label_, 0, wxEXPAND | wxBOTTOM, 5);
+
+    // Список пользователей
+    users_listbox_ = new wxListBox(main_panel, wxID_ANY,
+        wxDefaultPosition, wxSize(200, -1));
+    users_sizer->Add(users_listbox_, 1, wxEXPAND);
+
+    content_sizer->Add(users_sizer, 0, wxEXPAND);
+    main_sizer->Add(content_sizer, 1, wxEXPAND | wxALL, 5);
 
     //Средняя часть - история сообщений
     ChatRoomPanel* room_panel = new ChatRoomPanel(room_notebook_, MAIN_ROOM_NAME);
@@ -227,7 +248,6 @@ void MainWindow::ConstructInterface() {
 
     create_room_button_ = new wxButton(right_panel, wxID_ANY, "Создать комнату");
     room_list_button_ = new wxButton(right_panel, wxID_ANY, "Список комнат");
-    user_list_button_ = new wxButton(right_panel, wxID_ANY, "Список пользователей");
     leave_room_button_ = new wxButton(right_panel, wxID_ANY, "Выйти из комнаты");
     change_username_button_ = new wxButton(right_panel, wxID_ANY, "Изменить имя");
     logout_button_ = new wxButton(right_panel, wxID_ANY, "Выйти из приложения");
@@ -236,14 +256,12 @@ void MainWindow::ConstructInterface() {
     int min_width = 200;
     create_room_button_->SetMinSize(wxSize(min_width, -1));
     room_list_button_->SetMinSize(wxSize(min_width, -1));
-    user_list_button_->SetMinSize(wxSize(min_width, -1));
     leave_room_button_->SetMinSize(wxSize(min_width, -1));
     change_username_button_->SetMinSize(wxSize(min_width, -1));
     logout_button_->SetMinSize(wxSize(min_width, -1));
 
     right_sizer->Add(create_room_button_, 0, wxEXPAND | wxBOTTOM, 5);
-    right_sizer->Insert(1, room_list_button_, 0, wxEXPAND | wxBOTTOM, 5);
-    right_sizer->Insert(2, user_list_button_, 0, wxEXPAND | wxBOTTOM, 5);
+    right_sizer->Add(room_list_button_, 0, wxEXPAND | wxBOTTOM, 5);
     right_sizer->Add(leave_room_button_, 0, wxEXPAND | wxBOTTOM, 5);
     right_sizer->Add(change_username_button_, 0, wxEXPAND | wxBOTTOM, 5);
     right_sizer->Add(logout_button_, 0, wxEXPAND);
@@ -258,11 +276,9 @@ void MainWindow::ConstructInterface() {
 
     //Настройка обработчика сообщений
     client_->SetMessageHandler([this](const IncomingMessage& msg) {
-        CallAfter([this, msg]() {
-            AddMessage(msg);
-            });
+        CallAfter([this, msg]() { AddMessage(msg); });
         });
-    client_->SetRoomListHandler([this](const std::vector<std::string>& rooms) {
+    client_->SetRoomListHandler([this](const std::set<std::string>& rooms) {
         CallAfter([this, rooms]() { UpdateRoomList(rooms); });
         });
     client_->SetRoomCreateHandler([this](bool success, const std::string& room_name) {
@@ -274,6 +290,16 @@ void MainWindow::ConstructInterface() {
     client_->SetRoomExitHandler([this](bool success, const std::string& room_name) {
         CallAfter([this, success, room_name]() { LeaveRoom(success, room_name); });
         });
+    client_->SetChangeNameHandler([this](bool success, const std::string& name) {
+        CallAfter([this, success, name]() { ChangeName(success, name); });
+        });
+    client_->SetRoomUsersHandler([this](const std::string& room,
+        const std::set<std::string>& users) {
+            CallAfter([this, room, users]() { UpdateRoomUsers(room, users); });
+        });
+    client_->SetOtherUserNewNameHandler([this](const std::string& old_name, const std::string& new_name) {
+        CallAfter([this, old_name, new_name]() { UpdateInterfaceAfterChangedName(old_name, new_name); });
+        });
 
     //Биндинг событий
     Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnClose, this);
@@ -281,7 +307,6 @@ void MainWindow::ConstructInterface() {
     send_message_button_->Bind(wxEVT_BUTTON, &MainWindow::OnSendMessage, this);
     create_room_button_->Bind(wxEVT_BUTTON, &MainWindow::OnCreateRoom, this);
     room_list_button_->Bind(wxEVT_BUTTON, &MainWindow::OnRoomList, this);
-    user_list_button_->Bind(wxEVT_BUTTON, &MainWindow::OnUserList, this);
     leave_room_button_->Bind(wxEVT_BUTTON, &MainWindow::OnLeaveRoom, this);
     change_username_button_->Bind(wxEVT_BUTTON, &MainWindow::OnChangedUserName, this);
     logout_button_->Bind(wxEVT_BUTTON, &MainWindow::OnLogout, this);
@@ -290,6 +315,7 @@ void MainWindow::ConstructInterface() {
     text_style_underline_button_->Bind(wxEVT_BUTTON, &MainWindow::OnTextFormatUnderline, this);
     text_style_smiley_button_->Bind(wxEVT_BUTTON, &MainWindow::OnSmiley, this);
     input_field_->Bind(wxEVT_TEXT, &MainWindow::OnTextChanged, this);//для подсчета длинны сообщений
+    users_listbox_->Bind(wxEVT_CONTEXT_MENU, &MainWindow::OnUserListRightClick, this);
 
     Center();
     Maximize();
@@ -340,9 +366,6 @@ void MainWindow::OnCreateRoom(wxCommandEvent& event) {
         if (!room_name.IsEmpty()) {
             //Эмуляция запроса на сервер
             client_->CreateRoom(room_name.ToStdString());
-
-            //Создаем комнату в интерфейсе
-            //CreateRoom(room_name.ToStdString());
         }
     }
 }
@@ -352,38 +375,7 @@ void MainWindow::OnRoomList(wxCommandEvent& event) {
 }
 
 void MainWindow::OnUserList(wxCommandEvent& event) {
-    //// Эмуляция запроса к серверу - получение списка пользователей
-    //std::vector<wxString> all_users = {
-    //    "user1", "user2", "user3", "admin", "designer", "developer"
-    //};
-
-    //// Получаем список уже добавленных пользователей
-    //std::set<wxString> existing_users;
-    //for (size_t i = 0; i < room_notebook_->GetPageCount(); i++) {
-    //    wxString page_name = room_notebook_->GetPageText(i);
-    //    if (page_name.StartsWith("@")) {
-    //        existing_users.insert(page_name.AfterFirst('@'));
-    //    }
-    //}
-
-    //// Создаем диалог
-    //ListSelectionDialog dlg(this, "Пользователи онлайн", all_users, existing_users);
-    //if (dlg.ShowModal() == wxID_OK) {
-    //    wxString selected_user = dlg.GetSelectedItem();
-    //    if (!selected_user.IsEmpty()) {
-    //        // Создаем приватную комнату с префиксом @
-    //        wxString private_room = "@" + selected_user;
-    //        CreateRoom(private_room.ToStdString());
-
-    //        // Эмуляция начала приватного чата
-    //        IncomingMessage sys_msg;
-    //        sys_msg.sender = SYSTEM_SENDER_NAME;
-    //        sys_msg.room = private_room.ToStdString();
-    //        sys_msg.text = "Начало приватного чата с " + selected_user;
-    //        sys_msg.timestamp = std::chrono::system_clock::now();
-    //        AddMessage(sys_msg);
-    //    }
-    //}
+    
 }
 
 void MainWindow::OnLeaveRoom(wxCommandEvent& event) {
@@ -409,10 +401,15 @@ void MainWindow::OnChangedUserName(wxCommandEvent& event) {
 
     if (dlg.ShowModal() == wxID_OK) {
         wxString new_name = dlg.GetValue();
-        if (!new_name.IsEmpty() && new_name != current_username_) {
-            //Эмуляция запроса на сервер
-            client_->ChangeUsername(new_name.ToStdString());
-            current_username_ = new_name.ToStdString();
+        if (!new_name.IsEmpty()) {
+            if (new_name.at(0) != '@' && "@" + new_name != current_username_) {
+                std::string new_current_name = '@' + new_name.ToStdString();
+                client_->ChangeUsername(new_current_name);
+            }
+            else {
+                wxMessageBox("Имя не должно начинаться с \'@\'", "Ошибка", wxICON_WARNING);
+            }
+            
         }
     }
 }
@@ -421,9 +418,6 @@ void MainWindow::CreateRoom(bool success, const std::string& room_name) {
     if (success) {
         if (rooms_.find(room_name) == rooms_.end()) {
             client_->JoinRoom(room_name);
-            //ChatRoomPanel* room_panel = new ChatRoomPanel(room_notebook_, room_name);
-            //room_notebook_->AddPage(room_panel, room_name, true);
-            //rooms_[room_name] = room_panel;
         }
         else {
             wxMessageBox("Комната с таким именем уже существует", "Ошибка", wxICON_WARNING);
@@ -442,14 +436,102 @@ void MainWindow::AddMessage(const IncomingMessage& msg) {
         EnterRoom(true, msg.room);
     }
 
+    if (msg.text.find("Имя изменено на: ") != 0) {
+        //TODO
+    }
+
     //Отправляем сообщение в комнату
     rooms_[msg.room]->AddMessage(msg);
-
 }
 
 void MainWindow::OnTabChanged(wxNotebookEvent& event) {
-    //При смене вкладок можно обновлять интерфейс
+    int selection = room_notebook_->GetSelection();
+    if (selection != wxNOT_FOUND) {
+        wxString room_name = room_notebook_->GetPageText(selection);
+        //UpdateUserListForRoom(room_name.ToStdString());
+        client_->RequestUsersForRoom(room_name.ToStdString());
+    }
     event.Skip();
+}
+
+void MainWindow::UpdateRoomUsers(const std::string& room_name, const std::set<std::string>& users) {
+    if (room_notebook_->GetPageText(room_notebook_->GetSelection()).ToStdString() == room_name) {
+        users_listbox_->Clear();
+        for (const auto& user : users) {
+            wxString label = user;
+            if (user == current_username_) {
+                label += " (Вы)";
+            }
+            users_listbox_->Append(label);
+        }
+    }
+}
+
+void MainWindow::UpdateInterfaceAfterChangedName(const std::string& old_name, const std::string& new_name) {
+    std::cout << old_name << " сменил имя на " << new_name << '\n';
+    // 1. Отправляем уведомление в основную комнату
+    IncomingMessage msg;
+    msg.room = MAIN_ROOM_NAME;
+    msg.sender = SYSTEM_SENDER_NAME;
+    msg.text = old_name + " сменил имя на " + new_name;
+    msg.timestamp = std::chrono::system_clock::now();
+    AddMessage(msg);
+
+    // 2. Обработка приватных комнат
+    // Создаем копию карты комнат для безопасной итерации
+    auto rooms_copy = rooms_;
+
+    for (const auto& [room_name, panel] : rooms_copy) {
+        // Проверяем, является ли комната приватной
+        if (IsPrivateRoom(room_name)) {
+            // Извлекаем имена пользователей из названия комнаты (без "@@")
+            std::string users_str = room_name.substr(2);
+
+            // Проверяем, содержится ли старое имя в строке имен
+            if (users_str.find(old_name) != std::string::npos) {
+                // Заменяем старое имя на новое
+                std::string new_users_str = users_str;
+                size_t pos = new_users_str.find(old_name);
+                if (pos != std::string::npos) {
+                    new_users_str.replace(pos, old_name.length(), new_name);
+
+                    // Формируем новое имя комнаты
+                    std::string new_room_name = "@@" + new_users_str;
+
+                    // Обновляем вкладку
+                    for (size_t i = 0; i < room_notebook_->GetPageCount(); ++i) {
+                        wxWindow* page = room_notebook_->GetPage(i);
+                        if (auto room_panel = dynamic_cast<ChatRoomPanel*>(page)) {
+                            if (room_panel->GetRoomName() == room_name) {
+                                // Обновляем текст вкладки
+                                room_notebook_->SetPageText(i, new_room_name);
+
+                                // Обновляем имя комнаты в панели
+                                room_panel->SetRoomName(new_room_name);
+
+                                // Обновляем карту комнат
+                                rooms_.erase(room_name);
+                                rooms_[new_room_name] = room_panel;
+
+                                break;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    // 3. Обновляем текущее имя пользователя в интерфейсе
+    SetTitle(wxString::Format("Чат клиента - %s", current_username_));
+
+    // 4. Обновляем список пользователей в текущей комнате
+    int selection = room_notebook_->GetSelection();
+    if (selection != wxNOT_FOUND) {
+        if (auto page = dynamic_cast<ChatRoomPanel*>(room_notebook_->GetPage(selection))) {
+            client_->RequestUsersForRoom(page->GetRoomName());
+        }
+    }
 }
 
 void MainWindow::OnLogout(wxCommandEvent& event) {
@@ -578,15 +660,56 @@ int MainWindow::CountUsefulChars(const wxString& text) const {
     return count;
 }
 
-void MainWindow::UpdateRoomList(const std::vector<std::string>& rooms) {
+bool MainWindow::IsPrivateRoom(const std::string& name) const {
+    return name.size() > 2 && name[0] == '@' && name[1] == '@';
+}
+
+void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
+    int selection = users_listbox_->GetSelection();
+    if (selection == wxNOT_FOUND) return;
+
+    wxString selected_user = users_listbox_->GetString(selection);
+
+    // Проверка, что это не текущий пользователь
+    if (selected_user.EndsWith("(Вы)")) {
+        wxMessageBox("Нельзя создать приватный чат с самим собой", "Ошибка", wxICON_WARNING);
+        return;
+    }
+
+    // Удаляем пометку "(Вы)" если есть
+    selected_user.Replace(" (Вы)", "", true);
+
+    // Создаем контекстное меню
+    wxMenu menu;
+    menu.Append(CustomIDs::ID_CREATE_PRIVATE_CHAT, "Создать приватный чат с " + selected_user);
+
+    // Обработчик выбора пункта меню
+    menu.Bind(wxEVT_MENU, [this, selected_user](wxCommandEvent&) {
+        CreatePrivateChat(selected_user);
+        }, CustomIDs::ID_CREATE_PRIVATE_CHAT);
+
+    // Показываем меню в позиции курсора
+    users_listbox_->PopupMenu(&menu);
+}
+
+
+
+void MainWindow::UpdateRoomList(const std::set<std::string>& rooms) {
     // Получаем список уже открытых комнат
     std::set<wxString> existing_rooms;
     for (size_t i = 0; i < room_notebook_->GetPageCount(); i++) {
         existing_rooms.insert(room_notebook_->GetPageText(i));
     }
 
+    std::set<std::string> realrooms;
+    for (const auto& rr : rooms) {
+        if (rr.size() > 1 && rr[0] != '@' && rr[1] != '@') {
+            realrooms.insert(rr);
+        }
+    }
+
     // Создаем диалог выбора комнат
-    ListSelectionDialog dlg(this, "Доступные комнаты", rooms, existing_rooms);
+    ListSelectionDialog dlg(this, "Доступные комнаты", realrooms, existing_rooms);
 
     if (dlg.ShowModal() == wxID_OK) {
         wxString room_name = dlg.GetSelectedItem();
@@ -599,21 +722,82 @@ void MainWindow::UpdateRoomList(const std::vector<std::string>& rooms) {
 
 void MainWindow::EnterRoom(bool success, const std::string& room_name) {
     if (success) {
+        std::cerr <<"[MAIN]: " << current_username_ << " вошел в комнату \"" << room_name << "\"\n";
         ChatRoomPanel* room_panel = new ChatRoomPanel(room_notebook_, room_name);
         room_notebook_->AddPage(room_panel, room_name, true);
         rooms_[room_name] = room_panel;
+        client_->RequestUsersForRoom(room_name);
     }
 }
 
 void MainWindow::LeaveRoom(bool success, const std::string& room_name) {
     std::cout << " leave room \n";
     if (success && room_name != MAIN_ROOM_NAME) {
-        int selection = room_notebook_->GetSelection();
-
-        std::cout << "success and num = " << selection << "\n";
-        room_notebook_->DeletePage(selection);
-        rooms_.erase(room_name);
+        std::cerr << "[MAIN]: " << current_username_ << " вышел из комнаты \"" << room_name << "\"\n";
+        //int selection = room_notebook_->GetSelection();
+        //room_notebook_->DeletePage(selection);
+        //rooms_.erase(room_name);
+        for (size_t i = 0; i < room_notebook_->GetPageCount(); ++i) {
+            wxWindow* page = room_notebook_->GetPage(i);
+            if (auto room_panel = dynamic_cast<ChatRoomPanel*>(page)) {
+                if (room_panel->GetRoomName() == room_name) {
+                    room_notebook_->DeletePage(i);
+                    rooms_.erase(room_name);
+                    return;
+                }
+            }
+        }
     }   
+}
+
+void MainWindow::ChangeName(bool success, const std::string& new_name) {
+    std::cout << " change name \n";
+    if (success) {
+        current_username_ = new_name;
+        SetTitle(wxString::Format("Чат клиента - %s", current_username_));
+
+    }
+}
+
+void MainWindow::CreatePrivateChat(const wxString& username) {
+    // Преобразуем wxString в std::string
+    std::string selected_user = username.ToStdString();
+    std::string current_user = current_username_;
+
+    // Удаляем пометку "(Вы)" если есть
+    size_t pos = selected_user.find(" (Вы)");
+    if (pos != std::string::npos) {
+        selected_user.erase(pos, 5);
+    }
+
+    // Удаляем начальный '@' из имен
+    if (!current_user.empty() && current_user[0] == '@') {
+        current_user = current_user.substr(1);
+    }
+    if (!selected_user.empty() && selected_user[0] == '@') {
+        selected_user = selected_user.substr(1);
+    }
+
+    // Сортируем имена в лексикографическом порядке
+    std::vector<std::string> users = { current_user, selected_user };
+    std::sort(users.begin(), users.end());
+
+    // Формируем имя комнаты: @@ + user1 + user2
+    std::string room_name = "@@" + users[0] + users[1];
+
+    // Проверяем существование комнаты
+    if (rooms_.find(room_name) != rooms_.end()) {
+        // Переключаемся на существующую комнату
+        for (size_t i = 0; i < room_notebook_->GetPageCount(); i++) {
+            if (room_notebook_->GetPageText(i).ToStdString() == room_name) {
+                room_notebook_->SetSelection(i);
+                return;
+            }
+        }
+    }
+
+    // Создаем новую приватную комнату
+    client_->CreateRoom(room_name);
 }
 
 }// end namespace gui

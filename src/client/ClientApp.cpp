@@ -15,18 +15,16 @@ bool ClientApp::OnInit() {
         }
 
         wxString server = log_dlg->GetServer();
-        wxString username = log_dlg->GetUsername();
+        wxString username = "@" + log_dlg->GetUsername();
         wxString password = log_dlg->GetPassword();
 
+        std::string hash = ssl::HashPassword(password.ToStdString());
+
         std::cout << "Creating ChatClient...\n";
-        auto client = std::make_unique<client::ChatClient>(
-            server.ToStdString(),
-            username.ToStdString(),
-            password.ToStdString()
-        );
+        auto client = std::make_unique<client::ChatClient>(server.ToStdString());
 
         std::cout << "Creating MainWindow...\n";
-        gui::MainWindow* main_window = new gui::MainWindow(std::move(client));
+        gui::MainWindow* main_window = new gui::MainWindow(std::move(client), username.ToStdString(), hash);
 
         std::cout << "Showing MainWindow...\n";
         main_window->Show(true);

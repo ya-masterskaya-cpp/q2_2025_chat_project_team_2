@@ -20,7 +20,7 @@ void LoginDialog::ConstructInterface() {
     wxBoxSizer* main_sizer = new wxBoxSizer(wxHORIZONTAL);
 
     //Установка шрифта по умолчанию
-    SetFont(DEFAULT_FONT);
+    this->SetFont(DEFAULT_FONT);
 
     //левая часть - поля авторизации
     wxBoxSizer* left_sizer = new wxBoxSizer(wxVERTICAL);
@@ -135,14 +135,14 @@ void LoginDialog::OnLogin(wxCommandEvent& event) {
     // Сохраняем конфиг (серверы + пользовательские данные)
     SaveConfig();
 
-    //для теста передаем данные в главное окно
-    wxString message = wxString::Format(
-        "Вы успешно авторизованы на сервере: %s,\t под логином: %s\t",
-        GetServer(),GetUsername()
-    );
+    //пробуем авторизоваться
+    std::string username = GetUsername().ToStdString();
+    std::string sended_username = "@" + username;
+    std::string password = GetPassword().ToStdString();
+    std::string hash = ssl::HashPassword(password);
 
-    wxMessageBox(message, "Данные авторизации", wxOK | wxICON_INFORMATION);
-    EndModal(wxID_OK);
+    ConnetToSelectedServer();
+    network_client_->check_login(sended_username, hash);
 }
 
 void LoginDialog::OnCancel(wxCommandEvent& event) {
@@ -173,7 +173,7 @@ void LoginDialog::OnClose(wxCloseEvent& event) {
 
 void LoginDialog::OnAddServer(wxCommandEvent& event) {
     wxTextEntryDialog dlg(this,
-        "Введите адрес сервера в формате IP:PORT\nНапример: 192.168.1.11:51001",
+        "Введите адрес сервера в формате IP\nНапример: 192.168.1.11",
         "Добавление сервера");
 
     if (dlg.ShowModal() == wxID_OK) {
@@ -192,8 +192,8 @@ void LoginDialog::OnAddServer(wxCommandEvent& event) {
         } else {
             wxMessageBox(
                 "Некорректный формат сервера!\n"
-                "Используйте формат: XXX.XXX.XXX.XXX:PORT\n"
-                "Где XXX - число от 0 до 255, PORT - от 1 до 65535",
+                "Используйте формат: XXX.XXX.XXX.XXX\n"
+                "Где XXX - число от 0 до 255",
                 "Ошибка", wxICON_ERROR
             );
         }
@@ -238,35 +238,15 @@ void LoginDialog::OnDeleteServer(wxCommandEvent& event) {
 }
 
 bool LoginDialog::ValidateServerFormat(const wxString& server) {
-    wxString ip_part;
-    unsigned long port;
-    int pos = server.Find(':');
-
-    if (pos == wxNOT_FOUND) return false;
-
-    ip_part = server.Left(pos);
-    wxString port_str = server.Mid(pos + 1);
-
-    //проверка порта
-    if (!port_str.ToULong(&port) || port < 1 || port > 65535) {
-        return false;
-    }
-
-    //проверка ip
-    wxStringTokenizer tokenizer(ip_part, ".");
+    wxStringTokenizer tokenizer(server, ".");
     if (tokenizer.CountTokens() != 4) return false;
 
     while (tokenizer.HasMoreTokens()) {
         long num;
         wxString token = tokenizer.GetNextToken();
 
-        //проверка что число
         if (!token.ToLong(&num)) return false;
-
-        //проверка лиапозона
         if (num < 0 || num > 255) return false;
-
-        //проверка ведущего октета
         if (token.length() > 1 && token[0] == '0') return false;
     }
     return true;
@@ -367,10 +347,82 @@ void LoginDialog::UpdateUserSection(std::ofstream& file) {
     }
 }
 
+void LoginDialog::ConnetToSelectedServer() {
+    wxString selected_server = server_list_->GetStringSelection();
+    if (!network_client_ || selected_server != last_connected_server_) {
+        std::cerr << "Connect to " << selected_server << '\n';
+        network_client_ = std::make_unique<Client>();
+        network_client_->set_handler([this](const std::string& msg) {
+            CallAfter([this, msg] {
+                HandleNetworkMessage(msg);
+                });
+            });
+        network_client_->start(selected_server.ToStdString(), CLIENT_FIRST_PORT, CLIENT_SECOND_PORT);
+    }
+    last_connected_server_ = selected_server;
+}
+
 void LoginDialog::OnUpdateServers(wxCommandEvent& event) {
     //TODO: реализовать обновление серверов
     wxMessageBox("Функция обновления серверов будет реализована позже",
         "Информация", wxICON_INFORMATION);
 }
+
+bool LoginDialog::HandleNetworkMessage(const std::string& json_msg) {
+    std::cout << "[Authorize] Received: " << json_msg << "\n";
+
+    try {
+        auto j = nlohmann::json::parse(json_msg);
+
+        // Добавляем вывод для диагностики
+        std::cout << "[Network] Handling message: " << j.dump() << "\n";
+
+        if (!j.contains("type")) {
+            throw std::runtime_error("Missing 'type' field");
+        }
+
+        int type = j["type"];
+        IncomingMessage msg;
+        msg.timestamp = std::chrono::system_clock::now();
+
+        // Обработка приветственного сообщения
+        if (type == GENERAL) {
+            if (j.contains("content") && !j.contains("room") && !j.contains("user")) {
+                std::cout << "[Message] Handling message: " << j["content"].get<std::string>() << "\n";
+            }
+            else {
+                throw std::runtime_error("Invalid GENERAL message format");
+            }
+        }
+        // Обработка ответов сервера
+        else if (type == CHECK_LOGIN) {
+
+            if (!j.contains("answer") || !j.contains("what")) {
+                throw std::runtime_error("Missing fields in server response");
+            }
+
+            std::string answer = j["answer"].get<std::string>();
+            std::string text_authirize = j["what"].get<std::string>();
+
+            if (answer == "OK") {
+                EndModal(wxID_OK);
+            }
+            else if (answer == "err" && j.contains("reason") && j["reason"] == "user exists") {
+                wxMessageBox("Такой пользователь уже авторизирован в системе", "Ошибка", wxICON_ERROR);
+            }
+            else {
+                wxMessageBox("Невозможно подключиться к серверу", "Ошибка", wxICON_ERROR);
+            }
+        }
+        else {
+            std::cerr << "[Network] Unknown message type: " << type << "\n";
+        }
+    }
+    catch (const std::exception& e) {
+        std::cerr << "[Network] Error handling message: " << e.what() << "\n";
+    }
+    return true;
+}
+
 
 }//end namespace gui

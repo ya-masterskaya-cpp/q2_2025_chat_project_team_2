@@ -4,7 +4,7 @@ namespace gui {
 
 ListSelectionDialog::ListSelectionDialog(wxWindow* parent,
     const wxString& title,
-    const std::vector<std::string>& items,
+    const std::set<std::string>& items,
     const std::set<wxString>& existing_items)
     : wxDialog(parent, wxID_ANY, title, wxDefaultPosition, wxSize(400, 500))
 {

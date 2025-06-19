@@ -20,6 +20,7 @@ add_subdirectory(common/libdb)
 add_library(add_struct INTERFACE 
 	common/add_struct/add_struct.h
 	common/config/config.h
+	common/add_struct/General.h
 )
 target_include_directories(add_struct INTERFACE
     ${PROJECT_SOURCE_DIR}/common/add_struct
@@ -43,7 +44,7 @@ target_link_libraries(SSL_Lib PUBLIC openssl::openssl)
 add_library(ClientLogicLib STATIC 
 	src/client/ChatClient.h
 	src/client/ChatClient.cpp
-	src/server/ClientHTTP.h
+	src/client/ClientHTTP.h
 )
 target_include_directories(ClientLogicLib PUBLIC 
     ${PROJECT_SOURCE_DIR}/src/client
@@ -53,7 +54,6 @@ target_link_libraries(ClientLogicLib PUBLIC
 	add_struct
 	Boost::system
 	nlohmann_json::nlohmann_json
-	libdb
 )
 
 # для работы с gui
@@ -90,8 +90,12 @@ target_link_libraries(client PRIVATE
 
 add_executable(server 
 	src/server/main.cpp
+	src/server/Logger.h
+	src/server/Server.h
+	src/server/server.cpp
 )
 target_link_libraries(server PRIVATE
     Boost::system
 	nlohmann_json::nlohmann_json
+	add_struct
 )

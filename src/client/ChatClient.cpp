@@ -2,10 +2,8 @@
 
 namespace client {
 
-    ChatClient::ChatClient(const std::string& server,
-        const std::string& username,
-        const std::string& password) :
-        server_(server), username_(username){
+    ChatClient::ChatClient(const std::string& server) :
+        server_(server){
 
         //ТК у нас было подключение по 1 порту, а в реальности 2,
         //то пока сделаем так, потом изменим
@@ -31,10 +29,6 @@ namespace client {
             std::cerr << "[Network] Connection error: " << e.what() << "\n";
             throw;
         }
-
-        // Регистрация пользователя
-        network_client_->register_user(username, password);
-
     }
 
 void ChatClient::SetMessageHandler(MessageHandler handler) {
@@ -61,6 +55,22 @@ void ChatClient::SetRoomExitHandler(RoomExitHandler handler) {
     room_exit_handler_ = std::move(handler);
 }
 
+void ChatClient::SetChangeNameHandler(ChangeNameHandler handler) {
+    std::cout << "[ChatClient] Setting change name handler\n";
+    change_name_handler_ = std::move(handler);
+}
+
+void ChatClient::SetRoomUsersHandler(RoomUsersHandler handler) {
+    std::cout << "[ChatClient] Setting room users handler\n";
+    room_users_handler_ = std::move(handler);
+}
+
+void ChatClient::SetOtherUserNewNameHandler(OtherUserNewNameHandler handler) {
+    std::cout << "[ChatClient] Setting Other User NewName handler\n";
+    other_user_newname_handler_ = std::move(handler);
+}
+
+
 void ChatClient::SendMessageToServer(const OutgoingMessage& msg) {
     network_client_->send_message(msg.room, msg.text);
 }
@@ -84,6 +94,20 @@ void ChatClient::JoinRoom(const std::string& room_name) {
 void ChatClient::RequestRoomList() {
     network_client_->ask_rooms();
 }
+
+void ChatClient::RequestUsersForRoom(const std::string& room_name) {
+    network_client_->ask_users(room_name);
+}
+
+void ChatClient::RegisterUser(const std::string& user, const std::string& password) {
+    network_client_->register_user(user, password);
+}
+
+void ChatClient::LoginUser(const std::string& user, const std::string& password) {
+    network_client_->login_user(user, password);
+}
+
+
 
 void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
     
@@ -112,6 +136,9 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
                 msg.room = j["room"].get<std::string>();
                 msg.text = j["content"].get<std::string>();      
             }
+            else if (j.contains("content") && !j.contains("room") && !j.contains("user")) {
+                std::cout << "[Message] Handling message: " << j["content"].get<std::string>() << "\n";
+            }
             else {
                 throw std::runtime_error("Invalid GENERAL message format");
             }
@@ -119,41 +146,33 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
             if (message_handler_) {
                 message_handler_(msg);
             }
-        }
-        // Обработка ответов сервера
-        else if (type == LOGIN || type == CHANGE_NAME) {
-
-            msg.sender = SYSTEM_SENDER_NAME;
-            msg.room = MAIN_ROOM_NAME;
-
-            if (!j.contains("answer") || !j.contains("what")) {
-                throw std::runtime_error("Missing fields in server response");
-            }
-
-            std::string answer = j["answer"].get<std::string>();
-            std::string what = j["what"].get<std::string>();
-
-            switch (type) {
-            case LOGIN:
-                msg.text = (answer == "OK")
-                    ? "Успешный вход в систему"
-                    : "Ошибка авторизации: " + what;
-                break;
-
-            case CHANGE_NAME:
-                if (answer == "OK") {
-                    username_ = what;
-                    msg.text = "Имя изменено на: " + username_;
-                }
-                else {
-                    msg.text = "Ошибка смены имени: " + what;
-                }
-                break;
-            }
-
+        }// Обработка ответов сервера
+        else if (type == LOGIN) {
+            std::cout << "[LOGIN result]: " << j["answer"] << '\n';
             if (message_handler_) {
+                std::string message = j["what"].get<std::string>();
+                if (j["answer"] == "OK") {
+                    msg.room = MAIN_ROOM_NAME;
+                    msg.sender = SYSTEM_SENDER_NAME;
+                    msg.text = j["what"].get<std::string>()+ ", добро пожаловать на сервеер " + server_;
+                }
                 message_handler_(msg);
             }
+        }
+        // Обработка ответов сервера
+        else if (type == CHANGE_NAME) {
+            std::cout << "[CHANGE_NAME result]: " << j["answer"] << '\n';
+            if (change_name_handler_) {
+                bool success;
+                std::string message = j["what"].get<std::string>();
+                if (j["answer"] == "OK") {
+                    success = true;
+                }
+                else {
+                    success = false;
+                }
+                change_name_handler_(success, message);
+            } 
         }
         else if (type == ENTER_ROOM) {
             std::cout << "[ENTER ROOM result]: " << j["answer"] << '\n';
@@ -200,11 +219,30 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
         else if (type == ASK_ROOMS) {
             std::cout << "[ROOMS parse for]: " << j << '\n';
             if (room_list_handler_ && j.contains("rooms")) {
-                std::vector<std::string> rooms;
+                std::set<std::string> rooms;
                 for (const auto& room : j["rooms"]) {
-                    rooms.push_back(room);
+                    rooms.insert(room);
                 }
                 room_list_handler_(rooms);
+            }
+        }
+        else if (type == ASK_USERS) {
+            std::cout << "[ASK_USERS parse for]: " << j << '\n';
+            if (room_users_handler_ && j.contains("users")) {
+                std::string room = j["room"].get<std::string>();
+                std::set<std::string> users;
+                for (const auto& user : j["users"]) {
+                    users.insert(user);
+                }
+                room_users_handler_(room,users);
+            }
+        }
+        else if (type == INFO_NAME) {
+            std::cout << "[INFO_NAME parse for]: " << j << '\n';
+            if (room_users_handler_ && j.contains("new_name") && j.contains("old name")) {
+                std::string new_name = j["new_name"].get<std::string>();
+                std::string old_name = j["old name"].get<std::string>();
+                other_user_newname_handler_(old_name, new_name);
             }
         }
         else {
