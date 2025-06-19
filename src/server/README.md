@@ -34,7 +34,7 @@ client->register_user("my_login", "my_password");
 
 {"answer":"OK","type":111,"what":"my_login"} - в случае успеха
 
-{"answer":"err","type":111,"what":"my_login"} - в случае отказа
+{"answer":"err","type":111,"reason":"some reason","what":"my_login"} - в случае отказа
 
 При успехе можно начинать общение. Первоначальное имя в чате совпадает с логином.
 
@@ -52,6 +52,10 @@ client->leave_room("room"); - выйти из комнаты
 
 client->ask_rooms(); - запросить список комнат
 
+client->leave_chat(); - выйти из чата
+
+После выхода вся информация о пользователе удаляется, при следущем заходе он начинает с чистого листа. После случайной потери связи и повторного логина общение продолжается с прежнего места.
+
 Пример ответа сервера:
 
 {"rooms":["my_name","general","room1"],"type":115}
@@ -62,20 +66,5 @@ send_message("room", "message"); - отправить в комнату сооб
 
 {"content":"message","room":"general","type":101,"user":"my_name"} - пример сообщения, адресованного в комнату от пользователя
 
-Список типов сообщений:
+Список типов сообщений и значений поля "reason" в сообщениях об ошибке - в файле General.h
 
-const int GENERAL = 101;
-
-const int LOGIN = 111;
-
-const int CHANGE_NAME = 112;
-
-const int CREATE_ROOM = 113;
-
-const int ENTER_ROOM = 114;
-
-const int ASK_ROOMS = 115;
-
-const int LEAVE_ROOM = 116;
-
-Сервер завершает работу по команде 'q'
