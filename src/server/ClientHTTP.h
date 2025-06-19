@@ -85,7 +85,7 @@ public:
         );
     }
 
-    void register_user(const std::string& user, const std::string& password) {
+    void login_user(const std::string& user, const std::string& password) {
         mq_.add(
             MesBuilder(LOGIN).add("user", user).add("password", password).toString()
         );
@@ -121,10 +121,16 @@ public:
         );
     }
 
-        void leave_chat() {
+    void leave_chat() {
             mq_.add(
                 MesBuilder(LEAVE_CHAT).toString()
             );
+    }
+
+    void register_user(const std::string& user, const std::string& password) {
+        mq_.add(
+            MesBuilder(REGISTER).add("user", user).add("password", password).toString()
+        );
     }
 
 private:

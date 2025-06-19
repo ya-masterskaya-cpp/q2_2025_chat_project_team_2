@@ -11,6 +11,7 @@
 #include <vector>
 #include "json.h"
 #include <unordered_set>
+//#include <algorithm>
 #include "General.h"
 #include "Logger.h"
 
@@ -145,9 +146,14 @@ private:
                 int type = mes["type"];  
                 switch (type)
                 {
+                case REGISTER:
+                    register_user(session, mes["user"], mes["password"]);
+                    break;
                 case LOGIN:
-                    login = mes["user"];
-                    name = login_user(session, mes["user"]);
+                   if (check_login(session, mes["user"], mes["password"])) {
+                        login = mes["user"];
+                        name = login_user(session, login);
+                    }
                     break;
                 case CHANGE_NAME:
                     name = change_name(session, login, mes["name"]);
@@ -178,8 +184,7 @@ private:
             }
         }
         catch (...) {
-            if (session)
-            {
+            if (session)  {
                 session->invalidate();
             }
             logger_.logError("Client " + name + " disconnected");
@@ -218,12 +223,34 @@ private:
         return MesBuilder(type).add("what", what).add("answer", "err").add("reason",reason).j;
     }
 
+    bool check_login(MsgQueue* session, const std::string& login,
+        const std::string& password) {
+        auto it = users_passwords_.find(login);
+        if (it == users_passwords_.end() ||
+            it->second != password) {
+            session->add(make_err_answer(LOGIN, login, WRONG_LOGPASS));
+            return false;
+        }
+        else {
+            return true;
+        }
+    }
+
+    void register_user(MsgQueue* session, const std::string& login,
+        const std::string& password) {
+        if (users_passwords_.count(login)) {
+            session->add(make_err_answer(REGISTER, login, LOGIN_EXISTS));
+        }
+        else {
+            users_passwords_[login] = password;
+            session->add(make_ok_answer(REGISTER, login));
+        }
+    }
+
     std::string login_user(MsgQueue* session, const std::string& login) {
-        std::string name = login;
         if (logged_users_.count(login)) {
-            std::string name = logged_users_[login];
-            change_session(session, name);
-            return name;
+            change_session(session, logged_users_[login]);
+            return logged_users_[login];
         }
         else {
             add_user(session, login);
@@ -300,7 +327,8 @@ private:
             session->add(make_err_answer(CREATE_ROOM, room_name, ROOM_EXISTS));
         }
         else {
-            users_[room_name].insert(session);
+            //users_[room_name].insert(session);
+            users_.emplace(std::make_pair(room_name, std::unordered_set<MsgQueue*>()));
             session->add(make_ok_answer(CREATE_ROOM, room_name));
             logger_.logEvent("Room " + room_name + " created");
         }
@@ -335,6 +363,7 @@ private:
     RoomSessions users_;
     Logger logger_;
     std::unordered_map<std::string, std::string> logged_users_;
+    std::unordered_map<std::string, std::string> users_passwords_;
 };
 
 int main() {
