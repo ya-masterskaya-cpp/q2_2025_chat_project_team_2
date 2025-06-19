@@ -18,4 +18,3 @@ const std::string ENTER_TWICE = "user already entered the room";
 const std::string LEAVE_TWICE = "user is not in the room";
 
 const std::string LOG_FILE = "server_logs.txt";
-
