@@ -120,6 +120,13 @@ public:
             MesBuilder(LEAVE_ROOM).add("room", room).toString()
         );
     }
+
+        void leave_chat() {
+            mq_.add(
+                MesBuilder(LEAVE_CHAT).toString()
+            );
+    }
+
 private:
     void sender(const std::string& host, const std::string& in_port,
         const std::string& out_port) {

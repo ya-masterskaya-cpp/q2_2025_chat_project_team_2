@@ -27,6 +27,14 @@ struct MsgQueue
     std::vector<nlohmann::json> msg_;
     bool is_online = true;
 
+    MsgQueue& operator=(const MsgQueue & rhs) {
+        {
+            std::lock_guard<std::mutex> lk(m_);
+            msg_ = rhs.msg_;
+        }
+        return *this;
+    }
+
     void add(const nlohmann::json& j) {
         {
             std::lock_guard<std::mutex> lk(m_);
@@ -39,7 +47,10 @@ struct MsgQueue
     void wait_on_queue(F func) {
         std::unique_lock<std::mutex> lk(m_);
         while (true) {
-            cv_.wait(lk, [&] { return msg_.size() > 0 && is_online; });
+            cv_.wait(lk, [&] { return msg_.size() > 0 || !is_online; });
+            if (!is_online)  {
+                break;
+            }
             for (auto& mes : msg_) {
                 func(mes);
             }
@@ -47,12 +58,23 @@ struct MsgQueue
         }
     }
 
-    void validate(bool b) {
+    void invalidate() {
         {
             std::lock_guard<std::mutex> lk(m_);
-            is_online = b;
+            is_online = false;
         }
+        cv_.notify_all();
     }
+    
+    bool is_valid() {
+        bool b;
+        {
+            std::lock_guard<std::mutex> lk(m_);
+            b = is_online;
+        }
+        return b;
+    }
+    
 };
 
 struct MesBuilder
@@ -111,10 +133,7 @@ private:
 
     void getter(tcp::socket socket, MsgQueue* session) {
         std::string name;
-        std::string s;
-        nlohmann::json mes;
-        std::vector<std::string> v;
-        int type;
+        std::string login;
         try {
             websocket::stream<tcp::socket> ws(std::move(socket));
             ws.accept();
@@ -122,80 +141,31 @@ private:
             while (true)
             {
                 ws.read(buffer);
-                mes = nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
-                type = mes["type"];  
+                nlohmann::json mes = nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
+                int type = mes["type"];  
                 switch (type)
                 {
                 case LOGIN:
-                    name = mes["user"];
-                    if (users_.count(name)) {
-                        session->add(make_err_answer(LOGIN, name, USER_EXISTS));
-                    }
-                    else {
-                        users_[name].insert(session);
-                        users_["general"].insert(session);
-                        session->add(make_ok_answer(LOGIN, name));
-                        logger_.logEvent("Client " + name + " logged");
-                    }
+                    login = login_user(session, mes["user"]);
+                    name = login;
                     break;
                 case CHANGE_NAME:
-                    s = mes["name"];
-                    if (users_.count(s)) {
-                        session->add(make_err_answer(CHANGE_NAME, s, NAME_EXISTS));
-                    }
-                    else {                       
-                        users_.erase(name);
-                        users_[s].insert(session);
-                        logger_.logEvent("Client " + name + " changed name to " + s);
-                        name = s;
-                        session->add(make_ok_answer(CHANGE_NAME, s));
-                    }
+                    name = change_name(session, login, mes["name"]);
                     break;
                 case CREATE_ROOM:
-                    s = mes["room"];
-                    if (users_.count(s)) {
-                        session->add(make_err_answer(CREATE_ROOM, s, ROOM_EXISTS));
-                    }
-                    else {
-                        users_[s].insert(session);                        
-                        session->add(make_ok_answer(CREATE_ROOM, s));
-                        logger_.logEvent("Client " + name + " created room " + s);
-                    }
+                    create_room(session, mes["room"]);
                     break;
                 case ENTER_ROOM:
-                    s = mes["room"];
-                    if (!users_.count(s))  {
-                        session->add(make_err_answer(ENTER_ROOM, s, NO_ROOM));
-                    }
-                    else if (!users_[s].insert(session).second) {
-                        session->add(make_err_answer(ENTER_ROOM, s, ENTER_TWICE));
-                    }
-                    else {                       
-                        session->add(make_ok_answer(ENTER_ROOM, s));
-                        logger_.logEvent("Client " + name + " entered room " + s);
-                    }
+                    enter_room(session, mes["rooms"]);
                     break;
                 case ASK_ROOMS:
-                    for (auto& u : users_) {
-                        v.push_back(u.first);
-                    }
-                    session->add(
-                        MesBuilder(ASK_ROOMS).add("rooms", v).j
-                    );
-                    v.clear();
+                    ask_rooms(session);
                     break;
                 case LEAVE_ROOM:
-                    s = mes["room"];
-                    if (!users_.count(s)) {
-                        session->add(make_err_answer(LEAVE_ROOM, s, NO_ROOM));
-                    }
-                    else if (!users_[s].erase(session)) {
-                        session->add(make_err_answer(LEAVE_ROOM, s, LEAVE_TWICE));
-                    }
-                    else {
-                        session->add(make_ok_answer(LEAVE_ROOM, s));
-                        logger_.logEvent("Client " + name + " left room " + s);
-                    }
+                    leave_room(session, mes["room"]);
+                    break;
+                case LEAVE_CHAT:
+                    remove_user(session, login);
                     break;
                 case GENERAL: 
                     mes["user"] = name;
@@ -208,7 +178,10 @@ private:
             }
         }
         catch (...) {
-            session->validate(false);
+            if (session)
+            {
+                session->invalidate();
+            }
             logger_.logError("Client " + name + " disconnected");
         }
     }
@@ -245,12 +218,106 @@ private:
         return MesBuilder(type).add("what", what).add("answer", "err").add("reason",reason).j;
     }
 
-    void remove_user(MsgQueue* session) {
+    std::string login_user(MsgQueue* session, const std::string& login) {
+        std::string name = login;
+        if (logged_users_.count(login)) {
+            name = logged_users_[login];
+            MsgQueue* old_session = *users_[name].begin();
+            if (old_session->is_valid()) {
+                session->add(make_err_answer(LOGIN, login, USER_EXISTS));
+            }
+            else {
+                *session = *old_session;
+                for (auto& u : users_) {
+                    if (u.second.erase(old_session)) {
+                        u.second.insert(session);
+                    }
+                }
+                delete old_session;
+                session->add(make_ok_answer(LOGIN, login));
+                logger_.logEvent("Client " + login + " connected again");
+            }
+        }
+        else {
+            logged_users_[login] = login;
+            users_[login].insert(session);
+            users_["general"].insert(session);
+            session->add(make_ok_answer(LOGIN, login));
+            logger_.logEvent("Client " + login + " logged in");
+        }
+        return name;
+    }
+
+    std::string change_name(MsgQueue* session, const std::string& login,
+        const std::string& new_name) {
+        std::string old_name = logged_users_[login];
+        if (users_.count(new_name)) {
+            session->add(make_err_answer(CHANGE_NAME, new_name, NAME_EXISTS));
+        }
+        else {
+            logged_users_[login] = new_name;
+            users_.erase(old_name);
+            users_[new_name].insert(session);
+            old_name = new_name;
+            logger_.logEvent("Client " + login + " changed name to " + new_name);
+            session->add(make_ok_answer(CHANGE_NAME, new_name));
+        }
+        return old_name;
+    }
+
+    void ask_rooms(MsgQueue* session) {
+        std::vector<std::string> v;
+        for (auto& u : users_) {
+            v.push_back(u.first);
+        }
+        session->add(
+            MesBuilder(ASK_ROOMS).add("rooms", v).j
+        );
+    }
+
+    void remove_user(MsgQueue* session, const std::string& login) {
         for (auto& u : users_) {
             u.second.erase(session);
-            if (u.second.empty()) {
-                users_.erase(u.first);
-            }
+        }
+        users_.erase(logged_users_[login]);
+        logged_users_.erase(login);
+        session->invalidate();
+        session = nullptr;
+        logger_.logEvent("Client " + login + " left chat");
+    }
+
+    void create_room(MsgQueue* session, const std::string& room_name) {
+        if (users_.count(room_name)) {
+            session->add(make_err_answer(CREATE_ROOM, room_name, ROOM_EXISTS));
+        }
+        else {
+            users_[room_name].insert(session);
+            session->add(make_ok_answer(CREATE_ROOM, room_name));
+            logger_.logEvent("Room " + room_name + " created");
+        }
+    }
+
+    void enter_room(MsgQueue* session, const std::string& room_name) {
+        if (!users_.count(room_name)) {
+            session->add(make_err_answer(ENTER_ROOM, room_name, NO_ROOM));
+        }
+        else if (!users_[room_name].insert(session).second) {
+            session->add(make_err_answer(ENTER_ROOM, room_name, ENTER_TWICE));
+        }
+        else {
+            session->add(make_ok_answer(ENTER_ROOM, room_name));
+        }
+    }
+
+    void leave_room(MsgQueue* session, const std::string& room_name) {
+        if (!users_.count(room_name)) {
+            session->add(make_err_answer(LEAVE_ROOM, room_name, NO_ROOM));
+        }
+        else if (!users_[room_name].erase(session)) {
+            session->add(make_err_answer(LEAVE_ROOM, room_name, LEAVE_TWICE));
+        }
+        else {
+            session->add(make_ok_answer(LEAVE_ROOM, room_name));
         }
     }
 
@@ -258,6 +325,7 @@ private:
     MsgQueue in_msg; 
     RoomSessions users_;
     Logger logger_;
+    std::unordered_map<std::string, std::string> logged_users_;
 };
 
 int main() {
