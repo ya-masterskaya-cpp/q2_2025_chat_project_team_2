@@ -8,6 +8,8 @@ const int CREATE_ROOM = 113;
 const int ENTER_ROOM = 114;
 const int ASK_ROOMS = 115;
 const int LEAVE_ROOM = 116;
+const int LEAVE_CHAT = 117;
+
 
 const std::string USER_EXISTS = "user exists";
 const std::string NAME_EXISTS = "name exists";
