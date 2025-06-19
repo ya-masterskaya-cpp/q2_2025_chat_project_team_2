@@ -146,8 +146,8 @@ private:
                 switch (type)
                 {
                 case LOGIN:
-                    login = login_user(session, mes["user"]);
-                    name = login;
+                    login = mes["user"];
+                    name = login_user(session, mes["user"]);
                     break;
                 case CHANGE_NAME:
                     name = change_name(session, login, mes["name"]);
@@ -221,31 +221,40 @@ private:
     std::string login_user(MsgQueue* session, const std::string& login) {
         std::string name = login;
         if (logged_users_.count(login)) {
-            name = logged_users_[login];
-            MsgQueue* old_session = *users_[name].begin();
-            if (old_session->is_valid()) {
-                session->add(make_err_answer(LOGIN, login, USER_EXISTS));
-            }
-            else {
-                *session = *old_session;
-                for (auto& u : users_) {
-                    if (u.second.erase(old_session)) {
-                        u.second.insert(session);
-                    }
-                }
-                delete old_session;
-                session->add(make_ok_answer(LOGIN, login));
-                logger_.logEvent("Client " + login + " connected again");
-            }
+            std::string name = logged_users_[login];
+            change_session(session, name);
+            return name;
         }
         else {
-            logged_users_[login] = login;
-            users_[login].insert(session);
-            users_["general"].insert(session);
-            session->add(make_ok_answer(LOGIN, login));
-            logger_.logEvent("Client " + login + " logged in");
+            add_user(session, login);
+            return login;
         }
-        return name;
+    }
+
+    void change_session(MsgQueue* session, const std::string& name) {
+        MsgQueue* old_session = *users_[name].begin();
+        if (old_session->is_valid()) {
+            session->add(make_err_answer(LOGIN, name, USER_EXISTS));
+        }
+        else {
+            *session = *old_session;
+            for (auto& u : users_) {
+                if (u.second.erase(old_session)) {
+                    u.second.insert(session);
+                }
+            }
+            delete old_session;
+            session->add(make_ok_answer(LOGIN, name));
+            logger_.logEvent("Client " + name + " connected again");
+        }
+    }
+
+    void add_user(MsgQueue* session, const std::string& login) {
+        logged_users_[login] = login;
+        users_[login].insert(session);
+        users_["general"].insert(session);
+        session->add(make_ok_answer(LOGIN, login));
+        logger_.logEvent("Client " + login + " logged in");
     }
 
     std::string change_name(MsgQueue* session, const std::string& login,
