@@ -156,7 +156,7 @@ private:
                     create_room(session, mes["room"]);
                     break;
                 case ENTER_ROOM:
-                    enter_room(session, mes["rooms"]);
+                    enter_room(session, mes["room"]);
                     break;
                 case ASK_ROOMS:
                     ask_rooms(session);
