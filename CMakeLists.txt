@@ -13,10 +13,14 @@ find_package(SQLite3 REQUIRED CONFIG)
 find_package(OpenSSL REQUIRED CONFIG) 
 find_package(nlohmann_json REQUIRED)
 
+# для работы с базой данных
+add_subdirectory(common/libdb)
+
 # дополнительные структуры
 add_library(add_struct INTERFACE 
 	common/add_struct/add_struct.h
 	common/config/config.h
+	common/add_struct/General.h
 )
 target_include_directories(add_struct INTERFACE
     ${PROJECT_SOURCE_DIR}/common/add_struct
@@ -36,21 +40,11 @@ target_include_directories(SSL_Lib PUBLIC
 )
 target_link_libraries(SSL_Lib PUBLIC openssl::openssl)
 
-# для работы с базой данных
-add_library(DatabaseLib STATIC 
-	common/database/database.h
-	common/database/database.cpp
-)
-target_include_directories(DatabaseLib PUBLIC 
-    ${PROJECT_SOURCE_DIR}/common/database
-)
-target_link_libraries(DatabaseLib PUBLIC SQLite::SQLite3)
-
 # для работы с client_logic
 add_library(ClientLogicLib STATIC 
 	src/client/ChatClient.h
 	src/client/ChatClient.cpp
-	src/server/ClientHTTP.h
+	src/client/ClientHTTP.h
 )
 target_include_directories(ClientLogicLib PUBLIC 
     ${PROJECT_SOURCE_DIR}/src/client
@@ -79,7 +73,6 @@ target_include_directories(GUILib PUBLIC
     ${PROJECT_SOURCE_DIR}/common/gui
 )
 target_link_libraries(GUILib PUBLIC 
-	DatabaseLib 
 	wxWidgets::wxWidgets 
 	ClientLogicLib
 )
@@ -97,8 +90,12 @@ target_link_libraries(client PRIVATE
 
 add_executable(server 
 	src/server/main.cpp
+	src/server/Logger.h
+	src/server/Server.h
+	src/server/server.cpp
 )
 target_link_libraries(server PRIVATE
     Boost::system
 	nlohmann_json::nlohmann_json
+	add_struct
 )

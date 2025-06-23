@@ -11,7 +11,12 @@ namespace gui{
 class LoginDialog : public wxDialog {
 public: 
     LoginDialog(wxWindow* parent);
-    virtual ~LoginDialog() = default;
+    ~LoginDialog() {
+        if (network_client_) {
+            //network_client_->stop();
+            network_client_.reset();
+        }
+    }
 
     wxString GetUsername() const { return username_field_->GetValue(); }
     wxString GetPassword() const { return password_field_->GetValue(); }
@@ -31,7 +36,8 @@ private:
     wxButton* update_button_;
     bool m_remembered_; 
     wxString m_remembered_username_;
-
+    std::unique_ptr<Client> network_client_;
+    wxString last_connected_server_;
 
     void ConstructInterface();
     void OnLogin(wxCommandEvent& event);
@@ -45,6 +51,9 @@ private:
     void LoadConfig();               
     void SaveConfig();               
     void UpdateUserSection(std::ofstream& file);
+    void ConnetToSelectedServer();
+
+    bool HandleNetworkMessage(const std::string& json_msg);
 };
 
 }//end namespace gui

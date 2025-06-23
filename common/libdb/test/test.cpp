@@ -57,6 +57,20 @@ TEST_CASE("User and room management") {
         REQUIRE(db.GetRoomActiveUsers("general")[0].login == "user1");
     }
 
+    SECTION("Add user to room and verify all user fields") {
+        REQUIRE(db.AddUserToRoom("user1", "general") == true);
+
+        auto room_users = db.GetRoomActiveUsers("general");
+        REQUIRE(room_users.size() == 1);
+
+        const auto& fetched_user = room_users[0];
+        REQUIRE(fetched_user.login == "user1");
+        REQUIRE(fetched_user.name == "Name");         
+        REQUIRE(fetched_user.password_hash == "hash");
+        REQUIRE(fetched_user.role == "user");       
+        REQUIRE(fetched_user.is_deleted == false);  
+    }
+
     SECTION("Delete user from room") {
         db.AddUserToRoom("user1", "general");
         REQUIRE(db.DeleteUserFromRoom("user1", "general") == true);
@@ -196,5 +210,46 @@ TEST_CASE("User management 2") {
         REQUIRE(db.GetAllUsers().size() == 0);
         REQUIRE(db.GetActiveUsers().size() == 0);
         REQUIRE(db.GetDeletedUsers().size() == 0);
+    }
+}
+TEST_CASE("Duplicate entries handling") {
+    db::DB db(":memory:");
+    db.OpenDB();
+
+    db::User user{ "user1", "Name", "hash", "user", false, utime::GetUnixTimeNs() };
+    db.CreateUser(user);
+    db.CreateRoom("general", utime::GetUnixTimeNs());
+
+    SECTION("Creating a user with an existing login should be ignored") {
+        db::User duplicate_user{ "user1", "Another Name", "another_hash", "admin", false, utime::GetUnixTimeNs() };
+        REQUIRE(db.CreateUser(duplicate_user) == true); // INSERT OR IGNORE вернет success
+        REQUIRE(db.GetAllUsers().size() == 1);
+        auto users = db.GetAllUsers();
+        REQUIRE(users[0].name == "Name"); // Проверяем, что данные не изменились
+    }
+
+    SECTION("Adding a user to the same room twice should be ignored") {
+        REQUIRE(db.AddUserToRoom("user1", "general") == true);
+        REQUIRE(db.AddUserToRoom("user1", "general") == true); // INSERT OR IGNORE
+        REQUIRE(db.GetUserRooms("user1").size() == 1);
+    }
+}
+TEST_CASE("Operations with non-existent entities") {
+    db::DB db(":memory:");
+    db.OpenDB();
+    db.CreateRoom("general", utime::GetUnixTimeNs());
+    db::User user{ "user1", "Name", "hash", "user", false, utime::GetUnixTimeNs() };
+    db.CreateUser(user);
+
+    SECTION("Adding user to a non-existent room") {
+        // Подзапрос в ADD_USER_TO_ROOM вернет NULL, INSERT не произойдет.
+        // sqlite3_step вернет DONE, но изменений не будет.
+        REQUIRE(db.AddUserToRoom("user1", "non_existent_room") == true);
+        REQUIRE(db.GetUserRooms("user1").empty());
+    }
+
+    SECTION("Getting messages from an empty or non-existent room") {
+        REQUIRE(db.GetRecentMessagesRoom("non_existent_room").empty());
+        REQUIRE(db.GetCountRoomMessages("non_existent_room") == 0); 
     }
 }

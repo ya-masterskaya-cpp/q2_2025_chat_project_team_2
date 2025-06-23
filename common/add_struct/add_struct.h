@@ -42,3 +42,7 @@ struct OutgoingMessage {
     }
 };
 
+//для контекстного меню
+enum CustomIDs {
+    ID_CREATE_PRIVATE_CHAT = 10000
+};

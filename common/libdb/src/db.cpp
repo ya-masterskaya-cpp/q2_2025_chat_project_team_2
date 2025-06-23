@@ -74,12 +74,13 @@ namespace sql {
     )sql";
 
     static const char* DELETE_USER = R"sql(
-        DELETE FROM users 
-        WHERE login = ? 
-        AND users_id NOT IN (
-            SELECT users_id 
-            FROM user_rooms
-        )
+        DELETE FROM users AS u
+        WHERE u.login = ?
+        AND NOT EXISTS (
+            SELECT 1
+            FROM user_rooms AS ur
+            WHERE ur.users_id = u.users_id
+        );
     )sql";
 
     static const char* DELETE_DELETED_USER_WITHOUT_ROOM = R"sql(
@@ -93,11 +94,17 @@ namespace sql {
     )sql";
 
     static const char* ROOM_USERS_SQL = R"sql(
-        SELECT u.login, u.name, u.password_hash, u.role, u.is_deleted
-        FROM users u
-        JOIN user_rooms ur ON u.users_id = ur.users_id
-        JOIN rooms r ON ur.rooms_id = r.rooms_id
-        WHERE ur.room = ? ;
+        SELECT
+            u.login,
+            u.name,
+            u.password_hash,
+            ro.role,
+            u.is_deleted
+        FROM users AS u
+        JOIN user_rooms AS ur ON u.users_id = ur.users_id
+        JOIN rooms      AS r  ON ur.rooms_id = r.rooms_id
+        JOIN roles      AS ro ON u.roles_id = ro.roles_id -- Добавляем JOIN с roles
+        WHERE r.room = ?;
     )sql";
 
     static const char* ADD_USER_TO_ROOM = R"sql(
@@ -235,8 +242,8 @@ namespace db {
             std::cerr << "[IsUser] SQL error: " << sqlite3_errmsg(db_) << "\n";
             return result;
         }
-        std::string key = stmt.GetColumnText(stmt.Get(), 0);
-        std::string value = stmt.GetColumnText(stmt.Get(), 1);
+        std::string key = stmt.GetColumnText(0);
+        std::string value = stmt.GetColumnText(1);
         return value;
     }
 
@@ -308,8 +315,12 @@ namespace db {
     std::vector<std::string> DB::GetRooms() {
         Stmt stmt(db_, "SELECT room FROM rooms;");
         std::vector < std::string> result;
-        while (sqlite3_step(stmt.Get()) == SQLITE_ROW) {
+        int rc;
+        while ((rc = sqlite3_step(stmt.Get())) == SQLITE_ROW) {
             result.emplace_back(reinterpret_cast<const char*>(sqlite3_column_text(stmt.Get(), 0)));
+        }
+        if (rc != SQLITE_DONE) {
+            std::cerr << "SQL error during fetch: " << sqlite3_errmsg(db_) << "\n";
         }
         return result;
     }
@@ -368,14 +379,18 @@ namespace db {
     std::vector<User> DB::GetUsers(const char* sql) {
         std::vector<User> users;
         Stmt stmt(db_, sql);
-        while (sqlite3_step(stmt.Get()) == SQLITE_ROW) {
-            std::string login = stmt.GetColumnText(stmt.Get(), 0);
-            std::string name = stmt.GetColumnText(stmt.Get(), 1);
-            std::string password_hash = stmt.GetColumnText(stmt.Get(), 2);
-            std::string role = stmt.GetColumnText(stmt.Get(), 3);
+        int rc;
+        while ((rc = sqlite3_step(stmt.Get())) == SQLITE_ROW) {
+            std::string login = stmt.GetColumnText(0);
+            std::string name = stmt.GetColumnText(1);
+            std::string password_hash = stmt.GetColumnText(2);
+            std::string role = stmt.GetColumnText(3);
             bool is_deleted = sqlite3_column_int(stmt.Get(), 4) != 0;
             int64_t unixtime = sqlite3_column_int64(stmt.Get(), 5);
             users.emplace_back(login, name, password_hash, role, is_deleted, unixtime);
+        }
+        if (rc != SQLITE_DONE) {
+            std::cerr << "SQL error during fetch: " << sqlite3_errmsg(db_) << "\n";
         }
         return users;
     }
@@ -396,8 +411,12 @@ namespace db {
         std::vector<std::string> result;
         Stmt stmt(db_, sql::GET_USER_ROOMS);
         stmt.Bind(1, user_login);
-        while (sqlite3_step(stmt.Get()) == SQLITE_ROW) {
-            result.emplace_back(stmt.GetColumnText(stmt.Get(), 0));
+        int rc;
+        while ((rc = sqlite3_step(stmt.Get())) == SQLITE_ROW) {
+            result.emplace_back(stmt.GetColumnText(0));
+        }
+        if (rc != SQLITE_DONE) {
+            std::cerr << "SQL error during fetch: " << sqlite3_errmsg(db_) << "\n";
         }
         return result;
     }
@@ -407,10 +426,10 @@ namespace db {
         Stmt stmt(db_, sql::GET_ROOM_ACTIVE_USERS);
         stmt.Bind(1, room);
         while (sqlite3_step(stmt.Get()) == SQLITE_ROW) {
-            std::string login = stmt.GetColumnText(stmt.Get(), 0);
-            std::string name = stmt.GetColumnText(stmt.Get(), 1);
-            std::string password_hash = stmt.GetColumnText(stmt.Get(), 2);
-            std::string role = stmt.GetColumnText(stmt.Get(), 3);
+            std::string login = stmt.GetColumnText(0);
+            std::string name = stmt.GetColumnText(1);
+            std::string password_hash = stmt.GetColumnText(2);
+            std::string role = stmt.GetColumnText(3);
             bool is_deleted = sqlite3_column_int(stmt.Get(), 4) != 0;
             int64_t unixtime = sqlite3_column_int64(stmt.Get(), 5);
             users.emplace_back(login, name, password_hash, role, is_deleted, unixtime);
@@ -418,21 +437,20 @@ namespace db {
         return users;
     }
 
-    std::vector<Message> DB::GetMessagesRoom(const std::string& room, int64_t unixtime) {
-        std::vector<Message> messages;
-        return messages;
-    }
-    
     std::vector<Message> DB::GetRecentMessagesRoom(const std::string& room) {
         std::vector<Message> messages;
         Stmt stmt(db_, sql::GET_RECENT_ROOM_MESSAGES);
         stmt.Bind(1, room);
-        while (sqlite3_step(stmt.Get()) == SQLITE_ROW) {
-            std::string message = stmt.GetColumnText(stmt.Get(), 0);
-            std::string login = stmt.GetColumnText(stmt.Get(), 1);
-            std::string room = stmt.GetColumnText(stmt.Get(), 2);
+        int rc;
+        while ((rc = sqlite3_step(stmt.Get())) == SQLITE_ROW) {
+            std::string message = stmt.GetColumnText(0);
+            std::string login = stmt.GetColumnText(1);
+            std::string room = stmt.GetColumnText(2);
             int64_t unixtime = sqlite3_column_int64(stmt.Get(), 3);
             messages.emplace_back(message, unixtime, login, room);
+        }
+        if (rc != SQLITE_DONE) {
+            std::cerr << "SQL error during fetch: " << sqlite3_errmsg(db_) << "\n";
         }
         return messages;
     }
@@ -442,12 +460,16 @@ namespace db {
         Stmt stmt(db_, sql::GET_MESSAGES_ROOM_AFTER);
         stmt.Bind(1, room);
         stmt.Bind(2, unixtime);
-        while (sqlite3_step(stmt.Get()) == SQLITE_ROW) {
-            std::string message = stmt.GetColumnText(stmt.Get(), 0);
-            std::string login = stmt.GetColumnText(stmt.Get(), 1);
-            std::string room = stmt.GetColumnText(stmt.Get(), 2);
+        int rc;
+        while ((rc = sqlite3_step(stmt.Get())) == SQLITE_ROW) {
+            std::string message = stmt.GetColumnText(0);
+            std::string login = stmt.GetColumnText(1);
+            std::string room = stmt.GetColumnText(2);
             int64_t unixtime = sqlite3_column_int64(stmt.Get(), 3);
             messages.emplace_back(message, unixtime, login, room);
+        }
+        if (rc != SQLITE_DONE) {
+            std::cerr << "SQL error during fetch: " << sqlite3_errmsg(db_) << "\n";
         }
         return messages;
     }
@@ -485,9 +507,13 @@ namespace db {
     int DB::GetCountRoomMessages(const std::string& room) {
         Stmt stmt(db_, sql::GET_COUNT_ROOM_MESSAGES);
         stmt.Bind(1, room);
-        if (sqlite3_step(stmt.Get()) == SQLITE_ROW) {
+        int rc = sqlite3_step(stmt.Get());
+
+        if (rc == SQLITE_ROW) {
             return sqlite3_column_int(stmt.Get(), 0);
         }
+        std::cerr << "[GetCountRoomMessages] SQL error or unexpected result (" << rc << "): "
+            << sqlite3_errmsg(db_) << "\n";
         return -1;
     }
 
