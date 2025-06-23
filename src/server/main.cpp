@@ -12,9 +12,12 @@ Boost.Asio ловит SIGINT, но Windows консоль по умолчани�
 
 int main() {
    // {
-        Server serv;
-        serv.run_server();
-        
+    db::DB data_base;
+    data_base.OpenDB();
+    Server serv;
+    serv.run_server(data_base);
+
+    data_base.CloseDB();
     //}
     return 0;
 }

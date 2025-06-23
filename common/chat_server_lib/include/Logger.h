@@ -8,11 +8,23 @@
 class Logger {
 public:
     Logger() {
-        spdlog::set_pattern("%Y-%m-%d %H:%M:%S %n [%l] %v"); //ôîðìàò çàïèñè â ôàéë  2025-06-18 18:28:42 file_logger [info] Received message: Message 1
-        file_logger = spdlog::basic_logger_mt("file_logger", LOG_FILE);
-        file_logger->set_level(spdlog::level::debug);
-        file_logger->info("LOGGER  START");
-       // std::cout << "LOGGER  START\n";
+        // Проверка судествования логгера по имени.
+        file_logger = spdlog::get("file_logger");
+
+        // Если file_logger все еще nullptr, значит, его нужно создать.
+        if (!file_logger) {
+            try {
+                spdlog::set_pattern("%Y-%m-%d %H:%M:%S %n [%l] %v");//ôîðìàò çàïèñè â ôàéë  2025-06-18 18:28:42 file_logger [info] Received message: Message 1
+                file_logger = spdlog::basic_logger_mt("file_logger", LOG_FILE);
+                file_logger->set_level(spdlog::level::debug);
+                file_logger->info("LOGGER INITIALIZED AND STARTED");
+            }
+            catch (const spdlog::spdlog_ex& ex) {
+                // Обработка возможной ошибки при создании файла лога
+                std::cerr << "Log initialization failed: " << ex.what() << std::endl;
+            }
+        }
+        // Если логгер уже существовал, мы ничего не делаем,
     }
 
     void logMessage(const std::string& message) {

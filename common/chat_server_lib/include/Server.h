@@ -17,6 +17,9 @@
 #include "Logger.h"
 #include <atomic>               //добавил
 #include <csignal>              //добавил
+#include "db.hpp"
+#include "time_utils.hpp"
+#include "common_struct.h"
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -83,25 +86,6 @@ struct MsgQueue
     }
 };
 
-struct MesBuilder
-{
-    MesBuilder(int type) {
-        j["type"] = type;
-    }
-    MesBuilder& add(const std::string& key, const std::string& value) {
-        j[key] = value;
-        return *this;
-    }
-    MesBuilder& add(const std::string& key, const std::vector<std::string>& value) {
-        j[key] = value;
-        return *this;
-    }
-    std::string toString() {
-        return j.dump();
-    }
-    nlohmann::json j;
-};
-
 const int in_port = 9002;
 const int out_port = 9003;
 const std::string host = "127.0.0.1";
@@ -112,19 +96,19 @@ using RoomSessions = std::unordered_map<std::string, std::unordered_set<MsgQueue
 class Server
 {
 public:
-    void run_server();
+    virtual void run_server(db::DB& data_base);
 
     //добавил деструктор
-    ~Server() { 
+    virtual ~Server() { 
         logger_.logEvent("Server shutting down gracefully");
     }
 
 
-private:
+protected:
     void sender(tcp::socket socket, MsgQueue* session);
     void getter(tcp::socket socket, MsgQueue* session);
-    void client_accept();
-    void shuttle();
+    virtual void client_accept();
+    virtual void shuttle();
 
     nlohmann::json make_ok_answer(int type, const std::string& what);
     nlohmann::json make_err_answer(int type, const std::string& what, const std::string& reason = "");
@@ -140,6 +124,8 @@ private:
     nlohmann::json enter_room(MsgQueue* session, const std::string& room_name);
     nlohmann::json leave_room(MsgQueue* session, const std::string& room_name);
 
+//private:
+    db::DB* db_;
     asio::io_context ioc;
     MsgQueue in_msg;
     RoomSessions users_;
@@ -148,4 +134,8 @@ private:
     std::unordered_map<std::string, std::string> users_passwords_;
     asio::signal_set signals_{ ioc, SIGINT, SIGTERM };      //добавил
     std::atomic<bool> is_running_{ true };                  //добавил
+
+    // для тестового сервера
+    tcp::acceptor in_acceptor_{ ioc };  // Инициализируем сразу с io_context
+    tcp::acceptor out_acceptor_{ ioc }; // Инициализируем сразу с io_context
 };

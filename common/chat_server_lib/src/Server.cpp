@@ -1,7 +1,13 @@
 #include "Server.h"
 
-void Server::run_server() {
+void Server::run_server(db::DB& data_base) {
     logger_.logEvent("Server started");
+    
+    // подключили БД и заливаем логины с паролями, в том числе и мягко удаленных пользователей
+    db_ = &data_base;
+    for (auto& user : db_->GetAllUsers()) {
+        users_passwords_[user.login] = user.password_hash;
+    }
 
     // Добавил поддержку signal handler
     signals_.async_wait([this](const boost::system::error_code& /*ec*/, int /*signo*/) {
@@ -13,14 +19,6 @@ void Server::run_server() {
 
     std::thread(&Server::shuttle, this).detach();
     std::thread(&Server::client_accept, this).detach();
-
-    //std::string s;
-    //while (true) {
-    //    getline(std::cin, s);
-    //    if (s == "q") {
-    //        break;
-    //    }
-    //}
 
     ioc.run();  // изменил - теперь основной цикл
 
