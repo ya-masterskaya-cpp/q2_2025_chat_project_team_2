@@ -1,19 +1,35 @@
+# Корневой CMakeLists.txt
+
 cmake_minimum_required(VERSION 3.15)
 
 project(irc_chat CXX)
 set(CMAKE_CXX_STANDARD 17)
 
+if(MSVC)
+  # Устанавливаем минимальную целевую версию Windows.
+  # 0x0A00 - Windows 10.
+  # 0x0601 - Windows 7.
+  add_compile_definitions(_WIN32_WINNT=0x0A00)
+endif()
+
 # Подключение Conan
 include(${CMAKE_BINARY_DIR}/conan_toolchain.cmake) # Генерируется CMakeToolchain
 
 # Поиск зависимостей
-find_package(Boost REQUIRED COMPONENTS system CONFIG)
-find_package(wxWidgets REQUIRED COMPONENTS core base adv CONFIG)
+find_package(Boost REQUIRED COMPONENTS 
+    system 
+    beast 
+    CONFIG
+)
+find_package(wxWidgets REQUIRED COMPONENTS core base adv rich CONFIG)
 find_package(SQLite3 REQUIRED CONFIG)
 find_package(OpenSSL REQUIRED CONFIG) 
-find_package(nlohmann_json REQUIRED)
+find_package(nlohmann_json REQUIRED CONFIG)
+find_package(spdlog REQUIRED CONFIG)
+find_package(Catch2 REQUIRED CONFIG)
 
 # для работы с базой данных
+add_subdirectory(common/chat_server_lib)
 add_subdirectory(common/libdb)
 
 # дополнительные структуры
@@ -52,7 +68,7 @@ target_include_directories(ClientLogicLib PUBLIC
 target_link_libraries(ClientLogicLib PUBLIC 
 	SSL_Lib
 	add_struct
-	Boost::system
+	Boost::boost
 	nlohmann_json::nlohmann_json
 )
 
@@ -90,12 +106,6 @@ target_link_libraries(client PRIVATE
 
 add_executable(server 
 	src/server/main.cpp
-	src/server/Logger.h
-	src/server/Server.h
-	src/server/server.cpp
 )
-target_link_libraries(server PRIVATE
-    Boost::system
-	nlohmann_json::nlohmann_json
-	add_struct
-)
+
+target_link_libraries(server PRIVATE ChatServerLib)
