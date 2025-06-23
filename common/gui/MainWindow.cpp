@@ -681,7 +681,7 @@ void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
 
     // Создаем контекстное меню
     wxMenu menu;
-    menu.Append(CustomIDs::ID_CREATE_PRIVATE_CHAT, "Создать приватный чат с " + selected_user);
+    menu.Append(CustomIDs::ID_CREATE_PRIVATE_CHAT, "Создать чат с " + selected_user);
 
     // Обработчик выбора пункта меню
     menu.Bind(wxEVT_MENU, [this, selected_user](wxCommandEvent&) {
@@ -760,44 +760,47 @@ void MainWindow::ChangeName(bool success, const std::string& new_name) {
 }
 
 void MainWindow::CreatePrivateChat(const wxString& username) {
-    // Преобразуем wxString в std::string
-    std::string selected_user = username.ToStdString();
-    std::string current_user = current_username_;
+    //// Преобразуем wxString в std::string
+    //std::string selected_user = username.ToStdString();
+    //std::string current_user = current_username_;
 
-    // Удаляем пометку "(Вы)" если есть
-    size_t pos = selected_user.find(" (Вы)");
-    if (pos != std::string::npos) {
-        selected_user.erase(pos, 5);
-    }
+    //// Удаляем пометку "(Вы)" если есть
+    //size_t pos = selected_user.find(" (Вы)");
+    //if (pos != std::string::npos) {
+    //    selected_user.erase(pos, 5);
+    //}
 
-    // Удаляем начальный '@' из имен
-    if (!current_user.empty() && current_user[0] == '@') {
-        current_user = current_user.substr(1);
-    }
-    if (!selected_user.empty() && selected_user[0] == '@') {
-        selected_user = selected_user.substr(1);
-    }
+    //// Удаляем начальный '@' из имен
+    //if (!current_user.empty() && current_user[0] == '@') {
+    //    current_user = current_user.substr(1);
+    //}
+    //if (!selected_user.empty() && selected_user[0] == '@') {
+    //    selected_user = selected_user.substr(1);
+    //}
 
-    // Сортируем имена в лексикографическом порядке
-    std::vector<std::string> users = { current_user, selected_user };
-    std::sort(users.begin(), users.end());
+    //// Сортируем имена в лексикографическом порядке
+    //std::vector<std::string> users = { current_user, selected_user };
+    //std::sort(users.begin(), users.end());
 
-    // Формируем имя комнаты: @@ + user1 + user2
-    std::string room_name = "@@" + users[0] + users[1];
+    //// Формируем имя комнаты: @@ + user1 + user2
+    //std::string room_name = "@@" + users[0] + users[1];
 
-    // Проверяем существование комнаты
-    if (rooms_.find(room_name) != rooms_.end()) {
-        // Переключаемся на существующую комнату
-        for (size_t i = 0; i < room_notebook_->GetPageCount(); i++) {
-            if (room_notebook_->GetPageText(i).ToStdString() == room_name) {
-                room_notebook_->SetSelection(i);
-                return;
-            }
-        }
-    }
+    //// Проверяем существование комнаты
+    //if (rooms_.find(room_name) != rooms_.end()) {
+    //    // Переключаемся на существующую комнату
+    //    for (size_t i = 0; i < room_notebook_->GetPageCount(); i++) {
+    //        if (room_notebook_->GetPageText(i).ToStdString() == room_name) {
+    //            room_notebook_->SetSelection(i);
+    //            return;
+    //        }
+    //    }
+    //}
 
-    // Создаем новую приватную комнату
-    client_->CreateRoom(room_name);
+    //// Создаем новую приватную комнату
+    //client_->CreateRoom(room_name);
+
+    client_->CreateRoom(username.ToStdString());
+
 }
 
 }// end namespace gui

@@ -174,13 +174,16 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
                 change_name_handler_(success, message);
             } 
         }
-        else if (type == ENTER_ROOM) {
+        else if (type == ENTER_ROOM) { //114
             std::cout << "[ENTER ROOM result]: " << j["answer"] << '\n';
             if (room_enter_handler_) {
                 bool success;
                 std::string message = j["what"].get<std::string>();
                 if (j["answer"] == "OK") {
                     success = true;
+                }
+                else if (j["answer"] != "OK" && j.contains("reason") && 
+                    j["reason"].get<std::string>() == "user already entered the room") {
                 }
                 else {
                     success = false;
@@ -202,12 +205,13 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
                 room_exit_handler_(success, message);
             }
         }
-        else if (type == CREATE_ROOM) {
+        else if (type == CREATE_ROOM) { //113
             std::cout << "[ROOM result]: " << j["answer"] << '\n';
             if (room_create_handler_) {
                 bool success;
                 std::string message = j["what"].get<std::string>();
-                if (j["answer"] == "OK") {
+                std::string reason = j["reason"].get<std::string>();
+                if (j["answer"] == "OK" || reason == "room exists" ) {
                     success = true;
                 }
                 else {
