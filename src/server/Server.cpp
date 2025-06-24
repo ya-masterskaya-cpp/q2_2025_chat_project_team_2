@@ -78,7 +78,11 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
                 ans = create_room(mes["room"]);
                 break;
             case ENTER_ROOM:
-                ans = enter_room(session, mes["room"]);
+                nlohmann::json res = enter_room(session, mes["room"]);
+                session->add(res);
+                if(res["answer"] == "OK") {
+                    in_msg.add(ask_users(mes["room"]));
+                }
                 break;
             case ASK_ROOMS:
                 ans = ask_rooms();
