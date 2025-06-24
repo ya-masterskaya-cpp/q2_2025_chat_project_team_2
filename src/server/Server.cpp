@@ -65,6 +65,7 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
                 }
                 else if (!logged_users_.count(mes["user"])) {
                     ans = add_user(session, mes["user"]);
+                    ans["name"] = session->name;
                 }
                 else {
                     change_session(session, mes["user"]);
@@ -165,7 +166,10 @@ nlohmann::json Server::register_user(const std::string& login, const std::string
 void Server::change_session(MsgQueue* session, const std::string& login) {
     MsgQueue* old_session = *users_[logged_users_[login]].begin();
     if (old_session->is_online_) {
-        session->add(make_err_answer(LOGIN, login, USER_EXISTS));
+        nlohmann::json ans = make_err_answer(LOGIN, login, USER_EXISTS);
+        ans["name"] = session->name;
+        session->add(ans);
+        //session->add(make_err_answer(LOGIN, login, USER_EXISTS));
     }
     else {
         for (auto& u : users_) {
@@ -175,7 +179,10 @@ void Server::change_session(MsgQueue* session, const std::string& login) {
         }
         session->login = login;
         session->name = logged_users_[login];
-        session->add(make_ok_answer(LOGIN, login));
+        nlohmann::json ans = make_ok_answer(LOGIN, login);
+        ans["name"] = session->name;
+        session->add(ans);
+       // session->add(make_ok_answer(LOGIN, login));
         *session = *old_session;
         delete old_session;
         logger_.logEvent("Client " + login + " connected again");
