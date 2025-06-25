@@ -96,7 +96,8 @@ MainWindow::MainWindow(std::unique_ptr<client::ChatClient> client,
     client_(std::move(client)),
     default_font_(DEFAULT_SERVER),
     current_username_(username),
-    hash_password_(hash_password)
+    hash_password_(hash_password),
+    tray_icon_(nullptr)
     {
     // Устанавливаем шрифт с поддержкой UTF-8
     wxFont emoji_font = FontManager::GetEmojiFont();
@@ -280,6 +281,22 @@ void MainWindow::ConstructInterface() {
 
     main_panel->SetSizer(main_sizer);
 
+
+    // Загрузка иконки приложения
+    wxIcon appIcon;
+#if defined(__WXMSW__)
+    appIcon = wxIcon("APP_ICON", wxBITMAP_TYPE_ICO_RESOURCE);
+#elif defined(__WXGTK__)
+    appIcon = wxIcon(wxString("resources/icon.png"), wxBITMAP_TYPE_PNG);
+#elif defined(__WXOSX__)
+    appIcon = wxIcon(wxString("resources/icon.icns"), wxBITMAP_TYPE_ICON);
+#endif
+
+    if (appIcon.IsOk()) {
+        SetIcon(appIcon);
+    }
+
+
     //Настройка обработчика сообщений
     client_->SetLoginHandler([this](const std::string& name) {
         CallAfter([this, name]() { SetTitleMainWindow(name); });
@@ -331,8 +348,15 @@ void MainWindow::ConstructInterface() {
 }
 
 void MainWindow::SetTitleMainWindow(const std::string& name) {
-    wxString display_name = name;
-    current_username_ = display_name;
+    // Защита на случай пустого имени
+    if (current_username_.empty()) {
+        current_username_ = "Неизвестный пользователь";
+    }
+    else {
+        current_username_ = name;
+    }
+
+    // Устанавливаем заголовок
     SetTitle(wxString::Format(wxString::FromUTF8("Чат клиента - %s"), wxString::FromUTF8(current_username_)));
 }
 
@@ -355,7 +379,6 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
     // Для Linux/MacOS
     std::cout << "INPUT TEXT: " << text.ToUTF8().data() << '\n';
 #endif
-
 
 
     if (!text.IsEmpty()) {
@@ -463,11 +486,11 @@ void MainWindow::OnLeaveRoom(wxCommandEvent& event) {
 
 void MainWindow::OnChangedUserName(wxCommandEvent& event) {
     wxTextEntryDialog dlg(this, wxString::FromUTF8("Введите новое имя пользователя:"),
-        wxString::FromUTF8("Смена имени"), wxString::FromUTF8(current_username_.c_str()));
+        wxString::FromUTF8("Смена имени"), wxString::FromUTF8(current_username_));
 
     if (dlg.ShowModal() == wxID_OK) {
         wxString new_name = dlg.GetValue();
-        if (!new_name.IsEmpty()) {
+        if (!new_name.IsEmpty() && new_name.at(0)!='@') {
             wxScopedCharBuffer utf8 = new_name.ToUTF8();
             std::string new_name_utf8 = "@" + std::string(utf8.data(), utf8.length());
 
@@ -476,33 +499,27 @@ void MainWindow::OnChangedUserName(wxCommandEvent& event) {
                 client_->ChangeUsername(to_utf8("@" + new_name));
             }
             else {
-                wxMessageBox(wxString::FromUTF8("Новое имя должно отличаться от текущего"),
-                    wxString::FromUTF8("Ошибка"), wxICON_WARNING);
-            }           
+                wxMessageBox(wxString::FromUTF8("Имя должно отличаться от предыдущего"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+            }  
+        }
+        else {
+            wxMessageBox(wxString::FromUTF8("Имя не должно начинаться с @"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         }
     }
 }
 
 void MainWindow::CreateRoom(bool success, const std::string& room_name) {
-    if (!success) {
-        wxMessageBox(wxString::FromUTF8("Ошибка при создании комнаты"),
-            wxString::FromUTF8("Ошибка"), wxICON_WARNING); 
-    }
-    bool room_exists = false;
-    std::string normalized_name = NormalizeRoomName(room_name);
-    
-    for (const auto& [name, panel] : rooms_) {
-        if (NormalizeRoomName(name) == normalized_name) {
-            room_exists = true;
-            break;
+    if (success) {
+        if (rooms_.find(room_name) == rooms_.end()) {
+            client_->JoinRoom(room_name);
+        }
+        else {
+            wxMessageBox(to_utf8("Комната с таким именем уже существует"), to_utf8("Ошибка"), wxICON_WARNING);
         }
     }
-
-    if (room_exists) {
-        wxMessageBox("Комната с таким именем уже существует", "Ошибка", wxICON_WARNING);
-        return;
+    else {
+        wxMessageBox(to_utf8("Ошибка при создании комнаты"), to_utf8("Ошибка"), wxICON_WARNING);
     }
-    client_->JoinRoom(room_name);
 }
 
 void MainWindow::AddMessage(const IncomingMessage& msg) {
@@ -579,10 +596,7 @@ void MainWindow::UpdateInterfaceAfterChangedName(const std::string& old_name, co
     IncomingMessage msg;
     msg.room = MAIN_ROOM_NAME;
     msg.sender = SYSTEM_SENDER_NAME;
-    wxString message_text = wxString::FromUTF8(old_name) + 
-        wxString::FromUTF8(" сменил имя на ") + 
-        wxString::FromUTF8(new_name);
-    msg.text = message_text.ToUTF8().data();
+    msg.text = old_name + " сменил имя на " + new_name;
     msg.timestamp = std::chrono::system_clock::now();
     AddMessage(msg);
 
@@ -629,13 +643,23 @@ void MainWindow::OnLogout(wxCommandEvent& event) {
     if (wxMessageBox(wxString::FromUTF8("Вы уверены, что хотите выйти?"),
         wxString::FromUTF8("Подтверждение"),
         wxYES_NO | wxICON_QUESTION) == wxYES) {
+        client_->Logout();
         Close(true);
     }
 }
 
 void MainWindow::OnClose(wxCloseEvent& event) {
-    Destroy();
-    wxExit();
+if (event.CanVeto()) {
+        // Обычное закрытие - сворачиваем в трей
+        event.Veto();
+        Hide();
+        CreateTrayIcon();
+    }
+    else {
+        // Принудительное закрытие без флага
+        RemoveTrayIcon();
+        Destroy();
+    }
 }
 
 void MainWindow::OnTextFormatBold(wxCommandEvent& event) {
@@ -691,45 +715,6 @@ void MainWindow::OnSmiley(wxCommandEvent& event) {
 
     // Показываем меню
     text_style_smiley_button_->PopupMenu(&menu);
-    ////список смайликов
-    //auto smileys = bbcode::GetSmileys();
-
-    //wxMenu menu;
-    //std::map<int, wxString> id_to_smiley;
-    //for (const auto& smiley : smileys) {
-    //    int id = wxWindow::NewControlId();
-    //    menu.Append(id, smiley.emoji);
-    //    id_to_smiley[id] = smiley.emoji;
-    //}
-
-    //    // Обработчик с установкой фокуса
-    //menu.Bind(wxEVT_MENU, [this, id_to_smiley](wxCommandEvent& e) {
-    //    auto it = id_to_smiley.find(e.GetId());
-    //    if (it == id_to_smiley.end()) return;
-
-    //    wxString smiley = it->second;
-
-    //    // Сохраняем текущую позицию курсора
-    //    long start, end;
-    //    input_field_->GetSelection(&start, &end);
-
-    //    // Устанавливаем фокус на поле ввода
-    //    input_field_->SetFocus();
-
-    //    // Вставляем смайлик
-    //    input_field_->WriteText(smiley);
-
-    //    // Восстанавливаем позицию курсора
-    //    if (start == end) {
-    //        input_field_->SetInsertionPoint(start + smiley.length());
-    //    }
-    //    else {
-    //        input_field_->SetSelection(start + smiley.length(), start + smiley.length());
-    //    }
-   
-    //    });
-
-    //text_style_smiley_button_->PopupMenu(&menu);
 }
 
 void MainWindow::InsertTextAtCaret(const wxString& text) {
@@ -802,10 +787,6 @@ int MainWindow::CountUsefulChars(const wxString& text) const {
     return count;
 }
 
-bool MainWindow::IsPrivateRoom(const std::string& name) const {
-    return name.size() > 2 && name[0] == '@' && name[1] == '@';
-}
-
 void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
     int selection = users_listbox_->GetSelection();
     if (selection == wxNOT_FOUND) return;
@@ -819,8 +800,8 @@ void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
         return;
     }
 
-    // Удаляем пометку "(Вы)" если есть
-    selected_user.Replace(" (Вы)", "", true);
+    // Удаляем пометку "(Вы)" если есть ?? хотя откуда ранее же проверяли 😊
+    selected_user.Replace(wxString::FromUTF8(" (Вы)"), "", true);
 
     // Создаем контекстное меню
     wxMenu menu;
@@ -834,8 +815,6 @@ void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
     // Показываем меню в позиции курсора
     users_listbox_->PopupMenu(&menu);
 }
-
-
 
 void MainWindow::UpdateRoomList(const std::set<std::string>& rooms) {
     // Получаем список уже открытых комнат
@@ -858,33 +837,26 @@ void MainWindow::UpdateRoomList(const std::set<std::string>& rooms) {
         wxString room_name = dlg.GetSelectedItem();
         if (!room_name.empty()) {
             // Отправляем запрос на присоединение к комнате
-            client_->JoinRoom(room_name.ToStdString());
+            client_->JoinRoom(room_name.ToUTF8().data());
         }
     }
 }
 
 void MainWindow::EnterRoom(bool success, const std::string& room_name) {
-
-    std::cout << "\n\n\n" << room_name << "\n\n\n";
-
     if (success) {
-        std::cerr <<"[MAIN]: " << current_username_ << " вошел в комнату \"" << room_name << "\"\n";
+        std::cerr <<"[MAIN EnterRoom]: " << current_username_ << " вошел в комнату \"" << room_name << "\"\n";
         ChatRoomPanel* room_panel = new ChatRoomPanel(room_notebook_, room_name);
         wxString wx_room_name = wxString::FromUTF8(room_name.c_str());
         room_notebook_->AddPage(room_panel, wx_room_name, true);
         //room_notebook_->AddPage(room_panel, room_name, true);
         rooms_[room_name] = room_panel;
-        
-        std::cout << "--==ROOM CREATE, NOW SEND REQ FOR USERS==--\n";
-
-        //client_->RequestUsersForRoom(room_name);
     }
 }
 
 void MainWindow::LeaveRoom(bool success, const std::string& room_name) {
     std::cout << " leave room \n";
     if (success && room_name != MAIN_ROOM_NAME) {
-        std::cerr << "[MAIN]: " << current_username_ << " вышел из комнаты \"" << room_name << "\"\n";
+        std::cerr << "[MAIN LeaveRoom]: " << current_username_ << " вышел из комнаты \"" << room_name << "\"\n";
 
         for (size_t i = 0; i < room_notebook_->GetPageCount(); ++i) {
             wxWindow* page = room_notebook_->GetPage(i);
@@ -907,13 +879,88 @@ void MainWindow::ChangeName(bool success, const std::string& new_name) {
     }
 }
 
-
 void MainWindow::CreatePrivateChat(const wxString& username) {
     std::string target_user = username.ToUTF8().data();
     EnterRoom(true, target_user);
 }
 
+void MainWindow::CreateTrayIcon() {
+    if (tray_icon_) return;
 
+    tray_icon_ = new wxTaskBarIcon();
 
+    // Устанавливаем иконку
+    wxIcon icon;
+#if defined(__WXMSW__)
+    icon = wxIcon("APP_ICON", wxBITMAP_TYPE_ICO_RESOURCE);
+#elif defined(__WXGTK__)
+    // Получаем путь к исполняемому файлу
+    wxString exePath = wxStandardPaths::Get().GetExecutablePath();
+    wxString basePath = wxPathOnly(exePath);
+
+    // Пробуем несколько возможных путей
+    wxString iconPath = basePath + "/resources/icon.png";
+    if (!wxFileExists(iconPath)) {
+        iconPath = basePath + "/../resources/icon.png"; // Для сборок в поддиректориях
+    }
+
+    if (wxFileExists(iconPath)) {
+        icon = wxIcon(iconPath, wxBITMAP_TYPE_PNG);
+    }
+    else {
+        // Используем встроенную иконку как fallback
+        icon = wxArtProvider::GetIcon(wxART_INFORMATION);
+    }
+#elif defined(__WXOSX__)
+    icon = wxIcon(wxString("resources/icon.icns"), wxBITMAP_TYPE_ICON);
+#endif
+
+    if (icon.IsOk()) {
+        tray_icon_->SetIcon(icon, wxString::FromUTF8("Чат клиента"));
+    }
+    else {
+#ifdef __WXMSW__
+        icon = wxICON(wxicon);
+#else
+        icon = wxArtProvider::GetIcon(wxART_INFORMATION);
+#endif
+        tray_icon_->SetIcon(wxICON(wxicon), wxString::FromUTF8("Чат клиента"));
+    }
+
+    // Обработчики событий
+    tray_icon_->Bind(wxEVT_TASKBAR_LEFT_DCLICK, &MainWindow::OnTrayIconDoubleClick, this);
+}
+
+//удаление
+void MainWindow::RemoveTrayIcon() {
+    if (tray_icon_) {
+        // ОТВЯЗЫВАЕМ ВСЕ ОБРАБОТЧИКИ
+        tray_icon_->Unbind(wxEVT_TASKBAR_LEFT_DCLICK, &MainWindow::OnTrayIconDoubleClick, this);
+
+        // Удаляем иконку
+        tray_icon_->RemoveIcon();
+        delete tray_icon_;
+        tray_icon_ = nullptr;
+    }
+}
+
+void MainWindow::RestoreFromTray(){
+    Show();
+    Restore();
+    Raise();
+    RemoveTrayIcon();
+
+#ifdef __WXGTK__
+    // На Linux нужно обновить окно
+    Refresh();
+    Update();
+#endif
+}
+
+//двойной клик
+void MainWindow::OnTrayIconDoubleClick(wxTaskBarIconEvent& event){
+    std::cout << "DOUBLE CLICK\n";
+    RestoreFromTray();
+}
 
 }// end namespace gui
