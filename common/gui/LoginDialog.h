@@ -13,7 +13,6 @@ public:
     LoginDialog(wxWindow* parent);
     ~LoginDialog() {
         if (network_client_) {
-            //network_client_->stop();
             network_client_.reset();
         }
     }

@@ -82,6 +82,7 @@ private:
     void UpdateRoomUsers(const std::string& room_name, const std::set<std::string>& users);
     void UpdateInterfaceAfterChangedName(const std::string& old_name, const std::string& new_name);
 
+    void InsertTextAtCaret(const wxString& text);
     void ApplyTextStyle(const wxTextAttr& attr);
     void OnTextChanged(wxCommandEvent& event);
 
@@ -97,6 +98,7 @@ private:
     wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl);
     int CountUsefulChars(const wxString& text) const;
     bool IsPrivateRoom(const std::string& name) const;
+
 };
 
 }//end namespace gui

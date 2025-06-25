@@ -134,6 +134,7 @@ public:
     }
 
     void ask_users(const std::string& room) {
+        std::cout << "REQ TO SERV USERS FOR ROOM: " << room << '\n';
         mq_.add(
             MesBuilder(ASK_USERS).add("room", room).toString()
         );

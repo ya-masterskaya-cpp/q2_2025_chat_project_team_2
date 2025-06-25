@@ -70,6 +70,7 @@ void ChatClient::SendMessageToServer(const OutgoingMessage& msg) {
 }
 
 void ChatClient::CreateRoom(const std::string& room_name) {
+    std::cout << "SEND REQUEST TO CREATE ROOM " << room_name << '\n';
     network_client_->create_room(room_name);
 }
 
@@ -90,6 +91,7 @@ void ChatClient::RequestRoomList() {
 }
 
 void ChatClient::RequestUsersForRoom(const std::string& room_name) {
+    std::cout << "SEND TO SERVER USER FOR ROOM: " << room_name << '\n';
     network_client_->ask_users(room_name);
 }
 
@@ -177,7 +179,9 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
             std::cout << "[ENTER ROOM result]: " << j["answer"] << '\n';
             if (room_enter_handler_) {
                 bool success;
+
                 std::string message = j["what"].get<std::string>();
+                std::cout << "FOR ROOM: " << message << '\n';
                 if (j["answer"] == "OK") {
                     success = true;
                 }

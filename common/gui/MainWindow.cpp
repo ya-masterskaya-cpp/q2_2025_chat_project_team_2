@@ -22,56 +22,63 @@ ChatRoomPanel::ChatRoomPanel(wxWindow* parent, const std::string& room_name) :
     display_field_->SetMinSize(wxSize( 100, 300));
 
     //Установка шрифта по умолчанию
-    SetFont(DEFAULT_FONT);
-    
+    //SetFont(DEFAULT_FONT);
+    SetFont(FontManager::GetEmojiFont());
+    display_field_->SetBasicStyle(wxRichTextAttr());
+    display_field_->BeginSuppressUndo();
 
     sizer->Add(display_field_, 1, wxEXPAND);
     SetSizer(sizer);
 }
 
 void ChatRoomPanel::AddMessage(const IncomingMessage& msg) {
-    wxRichTextAttr attr;
-    attr.SetFontSize(10);
+    // Замораживаем обновление для производительности
+    display_field_->Freeze();
 
-    //Отдельный формат для системных сообщений
+    // 1. Подготовка базовых стилей
+    wxRichTextAttr base_attr;
+    base_attr.SetFontSize(10);
+    base_attr.SetFont(FontManager::GetEmojiFont());
+
+    wxRichTextAttr time_attr = base_attr;
+    wxRichTextAttr sender_attr = base_attr;
+    wxRichTextAttr text_attr = base_attr;
+    wxRichTextAttr separator_attr = base_attr;
+
+    // 2. Настройка специфических стилей
     if (msg.sender == SYSTEM_SENDER_NAME) {
-        attr.SetTextColour(*wxBLUE);
-        attr.SetFontWeight(wxFONTWEIGHT_BOLD);
-    } else {
-        attr.SetTextColour(*wxBLACK);
+        time_attr.SetTextColour(*wxBLUE);
+        time_attr.SetFontWeight(wxFONTWEIGHT_BOLD);
+        sender_attr = time_attr;
     }
-    
-    // Время сообщения
-    display_field_->BeginStyle(attr);
-    display_field_->WriteText(msg.formatted_time() + " - ");
-    display_field_->EndStyle();
+    else {
+        sender_attr.SetTextColour(wxColour(0, 128, 0)); // темно-зеленый
+    }
 
-    // Отправитель
-    wxRichTextAttr sender_attr = attr;
-    sender_attr.SetTextColour(wxColour(0, 128, 0)); // темно-зеленый
-
-    display_field_->BeginStyle(sender_attr);
-    display_field_->WriteText(msg.sender + " - ");
-    display_field_->EndStyle();
-
-    // Текст сообщения с BBCode
-    wxRichTextAttr text_attr;
-    text_attr.SetFontSize(10);
-    text_attr.SetTextColour(*wxBLACK);
-    display_field_->BeginStyle(text_attr);
-
-    ParseBBCode(wxString(msg.text));  // Парсинг BBCode
-
-    display_field_->EndStyle();
-
-    // Разделитель
-    wxRichTextAttr separator_attr;
     separator_attr.SetTextColour(wxColour(200, 200, 200));
-    display_field_->BeginStyle(separator_attr);
-    display_field_->WriteText("\n" + wxString('-', 80) + "\n");
-    display_field_->EndStyle();
 
-    // Прокрутка вниз
+    // 3. Запись времени
+    display_field_->SetDefaultStyle(time_attr);
+    display_field_->WriteText(msg.formatted_time() + " - ");
+
+    // 4. Запись отправителя
+    display_field_->SetDefaultStyle(sender_attr);
+    display_field_->WriteText(wxString::FromUTF8(msg.sender) + " - ");
+
+    // 5. Запись текста сообщения
+    display_field_->SetDefaultStyle(text_attr);
+
+    // Парсинг BBCode (прямо в текущую позицию)
+    ParseBBCode(wxString::FromUTF8(msg.text));
+
+    // 6. Разделитель
+    display_field_->SetDefaultStyle(separator_attr);
+    display_field_->WriteText("\n" + wxString('-', 80) + "\n");
+
+    // Размораживаем и обновляем
+    display_field_->Thaw();
+
+    // 7. Прокрутка вниз
     display_field_->ShowPosition(display_field_->GetLastPosition());
 }
 
@@ -85,13 +92,18 @@ void ChatRoomPanel::ParseBBCode(const wxString& text) {
 
 MainWindow::MainWindow(std::unique_ptr<client::ChatClient> client,
     const std::string username, const std::string& hash_password) :
-    wxFrame(nullptr, wxID_ANY, "Чат клиента",wxDefaultPosition, wxSize(800,600)), 
+    wxFrame(nullptr, wxID_ANY, wxString::FromUTF8("Чат клиента"),wxDefaultPosition, wxSize(800,600)),
     client_(std::move(client)),
     default_font_(DEFAULT_SERVER),
     current_username_(username),
     hash_password_(hash_password)
     {
+    // Устанавливаем шрифт с поддержкой UTF-8
+    wxFont emoji_font = FontManager::GetEmojiFont();
+    this->SetFont(emoji_font);
+
     ConstructInterface();
+
     client_->LoginUser(current_username_, hash_password_);
     client_->RequestUsersForRoom(MAIN_ROOM_NAME);
 }
@@ -105,7 +117,9 @@ void MainWindow::ConstructInterface() {
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
     //устанавливаем шрифт по умолчанию
-    this->SetFont(default_font_);
+    //this->SetFont(default_font_);
+    this->SetFont(FontManager::GetEmojiFont());
+    SetFont(FontManager::GetEmojiFont());
 
     //Верхняя часть - вкладки комнат 
     room_notebook_ = new wxNotebook(main_panel, wxID_ANY);
@@ -121,7 +135,7 @@ void MainWindow::ConstructInterface() {
 
     // Заголовок с именем комнаты
     room_users_label_ = new wxStaticText(main_panel, wxID_ANY,
-        "Пользователи комнаты:");
+        wxString::FromUTF8("Пользователи комнаты:"));
     room_users_label_->SetFont(wxFont(10, wxFONTFAMILY_DEFAULT,
         wxFONTSTYLE_NORMAL, wxFONTWEIGHT_NORMAL));
     users_sizer->Add(room_users_label_, 0, wxEXPAND | wxBOTTOM, 5);
@@ -155,7 +169,7 @@ void MainWindow::ConstructInterface() {
     text_style_bold_button_ = new wxButton(style_panel, wxID_ANY, "B", wxDefaultPosition, wxSize(30, 30));
     text_style_italic_button_ = new wxButton(style_panel, wxID_ANY, "I", wxDefaultPosition, wxSize(30, 30));
     text_style_underline_button_ = new wxButton(style_panel, wxID_ANY, "U", wxDefaultPosition, wxSize(30, 30));
-    text_style_smiley_button_ = new wxButton(style_panel, wxID_ANY, "☺", wxDefaultPosition, wxSize(30, 30));
+    text_style_smiley_button_ = new wxButton(style_panel, wxID_ANY, wxString::FromUTF8("☺"), wxDefaultPosition, wxSize(30, 30));
 
     style_sizer->Add(text_style_bold_button_, 0, wxRIGHT, 5);
     style_sizer->Add(text_style_italic_button_, 0, wxRIGHT, 5);
@@ -197,8 +211,8 @@ void MainWindow::ConstructInterface() {
 
     // Добавляем всплывающую подсказку
     wxString tooltip = wxString::Format(
-        "Ограничение длины сообщения: %d символов\n"
-        "Учитываются все символы кроме переносов строк",
+        wxString::FromUTF8("Ограничение длины сообщения: %d символов\n"
+        "Учитываются все символы кроме переносов строк"),
         MAX_MESSAGE_LENGTH
     );
     counter_panel->SetToolTip(tooltip);
@@ -215,13 +229,14 @@ void MainWindow::ConstructInterface() {
     input_field_->SetBackgroundColour(wxColour(255, 255, 230));
 
     //настройка базовых стилей
+    input_field_->SetFont(FontManager::GetEmojiFont());
     wxRichTextAttr attr;
-    attr.SetFont(default_font_);
+    //attr.SetFont(DEFAULT_FONT);
+    attr.SetFont(FontManager::GetEmojiFont());//для красивых смайлов
     input_field_->SetBasicStyle(attr);
-    
 
     //кнопка отправки
-    send_message_button_ = new wxButton(input_panel, wxID_ANY, "Отправить");
+    send_message_button_ = new wxButton(input_panel, wxID_ANY, wxString::FromUTF8("Отправить"));
     send_message_button_->SetMinSize(wxSize(100, -1));
 
     input_sizer->Add(input_field_, 1, wxEXPAND);
@@ -237,11 +252,11 @@ void MainWindow::ConstructInterface() {
     wxPanel* right_panel = new wxPanel(bottom_panel);
     wxBoxSizer* right_sizer = new wxBoxSizer(wxVERTICAL);
 
-    create_room_button_ = new wxButton(right_panel, wxID_ANY, "Создать комнату");
-    room_list_button_ = new wxButton(right_panel, wxID_ANY, "Список комнат");
-    leave_room_button_ = new wxButton(right_panel, wxID_ANY, "Выйти из комнаты");
-    change_username_button_ = new wxButton(right_panel, wxID_ANY, "Изменить имя");
-    logout_button_ = new wxButton(right_panel, wxID_ANY, "Выйти из приложения");
+    create_room_button_ = new wxButton(right_panel, wxID_ANY, wxString::FromUTF8("Создать комнату"));
+    room_list_button_ = new wxButton(right_panel, wxID_ANY, wxString::FromUTF8("Список комнат"));
+    leave_room_button_ = new wxButton(right_panel, wxID_ANY, wxString::FromUTF8("Выйти из комнаты"));
+    change_username_button_ = new wxButton(right_panel, wxID_ANY, wxString::FromUTF8("Изменить имя"));
+    logout_button_ = new wxButton(right_panel, wxID_ANY, wxString::FromUTF8("Выйти из приложения"));
 
     //Ставим минимальной ширины для кнопок
     int min_width = 200;
@@ -316,27 +331,41 @@ void MainWindow::ConstructInterface() {
 }
 
 void MainWindow::SetTitleMainWindow(const std::string& name) {
-    // Защита на случай пустого имени
-    if (current_username_.empty()) {
-        current_username_ = "Неизвестный пользователь";
-    }
-    else {
-        current_username_ = name;
-    }
-
-    // Устанавливаем заголовок
-    SetTitle(wxString::Format("Чат клиента - %s", current_username_));
+    wxString display_name = name;
+    current_username_ = display_name;
+    SetTitle(wxString::Format(wxString::FromUTF8("Чат клиента - %s"), wxString::FromUTF8(current_username_)));
 }
 
 void MainWindow::OnSendMessage(wxCommandEvent& event) {
     wxString text = input_field_->GetValue();
+
+
+    // Для отладки: вывод в консоль с поддержкой Unicode
+#ifdef _WIN32
+    // Переключаем консоль в режим UTF-8
+    static bool console_initialized = false;
+    if (!console_initialized) {
+        SetConsoleOutputCP(CP_UTF8);
+        console_initialized = true;
+    }
+
+    // Используем wcout для широких символов
+    std::wcout << L"INPUT TEXT: " << text.ToStdWstring() << L'\n';
+#else
+    // Для Linux/MacOS
+    std::cout << "INPUT TEXT: " << text.ToUTF8().data() << '\n';
+#endif
+
+
+
     if (!text.IsEmpty()) {
 
         //проверяем длину сообщения
         int  useful_count = CountUsefulChars(text);
         if (useful_count > MAX_MESSAGE_LENGTH) {
             wxMessageBox(
-                wxString::Format("Сообщение слишком длинное! Максимум %d символов.\n\nСимволов: %d",
+                wxString::Format(
+                    wxString::FromUTF8("Сообщение слишком длинное! Максимум %d символов.\n\nСимволов: %d"),
                     MAX_MESSAGE_LENGTH, useful_count), "Ошибка", wxICON_WARNING);
             return;
         }
@@ -348,24 +377,42 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
             //преобразуем в bbcode
             wxString bbcode_text = ConvertRichTextToBBCode(input_field_);
 
+#ifdef _WIN32
+            std::wcout << L"BBCODE: " << bbcode_text.ToStdWstring() << L'\n';
+#else
+            std::cout << "BBCODE: " << bbcode_text.ToUTF8().data() << '\n';
+#endif
+
             OutgoingMessage msg;
-            msg.room = room_name.ToStdString();
-            msg.text = bbcode_text.ToStdString();
+            msg.room = room_name.ToUTF8().data();
+            msg.text = bbcode_text.ToUTF8().data();
+
+
+#ifdef _WIN32
+            std::wcout << L"FORMATTED TEXT: " << wxString::FromUTF8(msg.text).ToStdWstring() << L'\n';
+#else
+            std::cout << "FORMATTED TEXT: " << msg.text << '\n';
+#endif
+
 
             client_->SendMessageToServer(msg);
             input_field_->Clear();
 
             //reverse msg for private 
-            IncomingMessage reverse_msg;
-            reverse_msg.room = msg.room;
-            reverse_msg.text = std::move(msg.text);
-            reverse_msg.sender = msg.room;
-            reverse_msg.timestamp = std::chrono::system_clock::now();
-            AddMessage(reverse_msg);
+            if (!msg.room.empty() && msg.room.at(0) == '@') {
+                IncomingMessage reverse_msg;
+                reverse_msg.room = msg.room;
+                reverse_msg.text = std::move(msg.text);
+                reverse_msg.sender = current_username_;
+                reverse_msg.timestamp = std::chrono::system_clock::now();
+                AddMessage(reverse_msg);
+            }
 
             //После отправки сбрасываем стили
             wxRichTextAttr reset_attr;
-            reset_attr.SetFont(default_font_);
+            //reset_attr.SetFont(default_font_);
+            reset_attr.SetFont(FontManager::GetEmojiFont());
+
             input_field_->SetBasicStyle(reset_attr);
             input_field_->SetDefaultStyle(reset_attr);
         }
@@ -375,12 +422,13 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
 }
 
 void MainWindow::OnCreateRoom(wxCommandEvent& event) {
-    wxTextEntryDialog dlg(this, "Введите название комнаты:", "Создание комнаты");
+    wxTextEntryDialog dlg(this, wxString::FromUTF8("Введите название комнаты:"),
+        wxString::FromUTF8("Создание комнаты"));
     if (dlg.ShowModal() == wxID_OK) {
         wxString room_name = dlg.GetValue();
         if (!room_name.IsEmpty()) {
-            //Эмуляция запроса на сервер
-            client_->CreateRoom(room_name.ToStdString());
+            std::string debug_name = to_utf8(room_name);
+            client_->CreateRoom(debug_name);
         }
     }
 }
@@ -396,73 +444,91 @@ void MainWindow::OnUserList(wxCommandEvent& event) {
 void MainWindow::OnLeaveRoom(wxCommandEvent& event) {
     int selection = room_notebook_->GetSelection();
     if (selection == wxNOT_FOUND) {
-        wxMessageBox("Выберите комнату для выхода", "Ошибка", wxICON_WARNING);
+        wxMessageBox(wxString::FromUTF8("Выберите комнату для выхода"),
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         return;
     }
 
     wxString room_name = room_notebook_->GetPageText(selection);
 
     if (room_name == MAIN_ROOM_NAME) {
-        wxMessageBox("Нельзя выйти из основной комнаты", "Ошибка", wxICON_WARNING);
+        wxMessageBox(wxString::FromUTF8("Нельзя выйти из основной комнаты"),
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         return;
     }
     else {
-        client_->LeaveRoom(room_name.ToStdString());
+        client_->LeaveRoom(to_utf8(room_name));
     }  
 }
 
 void MainWindow::OnChangedUserName(wxCommandEvent& event) {
-    wxTextEntryDialog dlg(this, "Введите новое имя пользователя:", "Смена имени", current_username_);
+    wxTextEntryDialog dlg(this, wxString::FromUTF8("Введите новое имя пользователя:"),
+        wxString::FromUTF8("Смена имени"), wxString::FromUTF8(current_username_.c_str()));
 
     if (dlg.ShowModal() == wxID_OK) {
         wxString new_name = dlg.GetValue();
         if (!new_name.IsEmpty()) {
-            if (new_name.at(0) != '@' && "@" + new_name != current_username_) {
-                std::string new_current_name = '@' + new_name.ToStdString();
-                client_->ChangeUsername(new_current_name);
+            wxScopedCharBuffer utf8 = new_name.ToUTF8();
+            std::string new_name_utf8 = "@" + std::string(utf8.data(), utf8.length());
+
+            // Проверка на валидность имени
+            if (new_name_utf8 != current_username_) {
+                client_->ChangeUsername(to_utf8("@" + new_name));
             }
             else {
-                wxMessageBox("Имя не должно начинаться с \'@\'", "Ошибка", wxICON_WARNING);
-            }
-            
+                wxMessageBox(wxString::FromUTF8("Новое имя должно отличаться от текущего"),
+                    wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+            }           
         }
     }
 }
 
 void MainWindow::CreateRoom(bool success, const std::string& room_name) {
-    if (success) {
-        if (rooms_.find(room_name) == rooms_.end()) {
-            client_->JoinRoom(room_name);
-        }
-        else {
-            wxMessageBox("Комната с таким именем уже существует", "Ошибка", wxICON_WARNING);
-        }
+    if (!success) {
+        wxMessageBox(wxString::FromUTF8("Ошибка при создании комнаты"),
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING); 
     }
-    else {
-        wxMessageBox("Ошибка при создании комнаты", "Ошибка", wxICON_WARNING);
-    }
+    bool room_exists = false;
+    std::string normalized_name = NormalizeRoomName(room_name);
     
+    for (const auto& [name, panel] : rooms_) {
+        if (NormalizeRoomName(name) == normalized_name) {
+            room_exists = true;
+            break;
+        }
+    }
+
+    if (room_exists) {
+        wxMessageBox("Комната с таким именем уже существует", "Ошибка", wxICON_WARNING);
+        return;
+    }
+    client_->JoinRoom(room_name);
 }
 
 void MainWindow::AddMessage(const IncomingMessage& msg) {
+    // Преобразование имен комнат и отправителей в UTF-8
+    wxString room_name = wxString::FromUTF8(msg.room.c_str());
+    wxString sender_name = wxString::FromUTF8(msg.sender.c_str());
+
+    std::cout << "ADDMESS: " << room_name << " : " << sender_name << '\n';
+
     //для приватных сообщений
     if (msg.room == current_username_) {
-        std::string new_room_name = msg.sender;
 
         //Если комнаты не существует, то созданим ее
-        if (rooms_.find(new_room_name) == rooms_.end()) {
-            std::cout << "Create room " << new_room_name << "\n";
-            EnterRoom(true, new_room_name);
+        if (rooms_.find(msg.sender) == rooms_.end()) {
+            std::cout << "Create room " << msg.sender << "\n";
+            EnterRoom(true, msg.sender);
         }
 
         IncomingMessage modify_msg;
-        modify_msg.room = new_room_name;
+        modify_msg.room = msg.sender;
         modify_msg.text = msg.text;
         modify_msg.sender = msg.sender;
         modify_msg.timestamp = msg.timestamp;
 
         //Отправляем сообщение в комнату
-        rooms_[new_room_name]->AddMessage(modify_msg);
+        rooms_[msg.sender]->AddMessage(modify_msg);
     }
     else {
         //Если комнаты не существует, то созданим ее
@@ -481,31 +547,42 @@ void MainWindow::OnTabChanged(wxNotebookEvent& event) {
     if (selection != wxNOT_FOUND) {
         wxString room_name = room_notebook_->GetPageText(selection);
         //UpdateUserListForRoom(room_name.ToStdString());
-        client_->RequestUsersForRoom(room_name.ToStdString());
+        client_->RequestUsersForRoom(to_utf8(room_name));
     }
     event.Skip();
 }
 
 void MainWindow::UpdateRoomUsers(const std::string& room_name, const std::set<std::string>& users) {
-    if (room_notebook_->GetPageText(room_notebook_->GetSelection()).ToStdString() == room_name) {
+    // Проверяем, что обновление для текущей вкладки
+    wxString current_room = room_notebook_->GetPageText(room_notebook_->GetSelection());
+    wxString target_room = wxString::FromUTF8(room_name.c_str());
+
+    if (current_room == target_room) {
         users_listbox_->Clear();
+
         for (const auto& user : users) {
-            wxString label = user;
+            // Преобразуем имя пользователя в wxString с учетом UTF-8
+            wxString label = wxString::FromUTF8(user);
+
             if (user == current_username_) {
-                label += " (Вы)";
+                label += wxString::FromUTF8(" (Вы)");
             }
+
             users_listbox_->Append(label);
         }
     }
 }
 
 void MainWindow::UpdateInterfaceAfterChangedName(const std::string& old_name, const std::string& new_name) {
-    std::cout << old_name << " сменил имя на " << new_name << '\n';
+    std::cout << old_name << wxString::FromUTF8(" сменил имя на ") << new_name << '\n';
     // 1. Отправляем уведомление в основную комнату
     IncomingMessage msg;
     msg.room = MAIN_ROOM_NAME;
     msg.sender = SYSTEM_SENDER_NAME;
-    msg.text = old_name + " сменил имя на " + new_name;
+    wxString message_text = wxString::FromUTF8(old_name) + 
+        wxString::FromUTF8(" сменил имя на ") + 
+        wxString::FromUTF8(new_name);
+    msg.text = message_text.ToUTF8().data();
     msg.timestamp = std::chrono::system_clock::now();
     AddMessage(msg);
 
@@ -517,9 +594,12 @@ void MainWindow::UpdateInterfaceAfterChangedName(const std::string& old_name, co
     for (size_t i = 0; i < room_notebook_->GetPageCount(); ++i) {
         wxWindow* page = room_notebook_->GetPage(i);
         if (auto room_panel = dynamic_cast<ChatRoomPanel*>(page)) {
-            if (room_panel->GetRoomName() == old_name) {
+            wxString room_name = wxString::FromUTF8(room_panel->GetRoomName().c_str());
+
+            if (room_name == wxString::FromUTF8(old_name.c_str())) {
                 // Обновляем текст вкладки
-                room_notebook_->SetPageText(i, new_name);
+                wxString new_room_name = wxString::FromUTF8(new_name.c_str());
+                room_notebook_->SetPageText(i, new_room_name);
 
                 // Обновляем имя комнаты в панели
                 room_panel->SetRoomName(new_name);
@@ -534,19 +614,20 @@ void MainWindow::UpdateInterfaceAfterChangedName(const std::string& old_name, co
     }
 
     // 3. Обновляем текущее имя пользователя в интерфейсе
-    SetTitle(wxString::Format("Чат клиента - %s", current_username_));
+    SetTitleMainWindow(current_username_);
 
     // 4. Обновляем список пользователей в текущей комнате
     int selection = room_notebook_->GetSelection();
     if (selection != wxNOT_FOUND) {
         if (auto page = dynamic_cast<ChatRoomPanel*>(room_notebook_->GetPage(selection))) {
-            client_->RequestUsersForRoom(page->GetRoomName());
+            client_->RequestUsersForRoom(to_utf8(page->GetRoomName()));
         }
     }
 }
 
 void MainWindow::OnLogout(wxCommandEvent& event) {
-    if (wxMessageBox("Вы уверены, что хотите выйти?", "Подтверждение",
+    if (wxMessageBox(wxString::FromUTF8("Вы уверены, что хотите выйти?"),
+        wxString::FromUTF8("Подтверждение"),
         wxYES_NO | wxICON_QUESTION) == wxYES) {
         Close(true);
     }
@@ -559,62 +640,112 @@ void MainWindow::OnClose(wxCloseEvent& event) {
 
 void MainWindow::OnTextFormatBold(wxCommandEvent& event) {
     wxRichTextAttr attr;
+    attr.SetFont(FontManager::GetEmojiFont());
     attr.SetFontWeight(wxFONTWEIGHT_BOLD);
     ApplyTextStyle(attr);
 }
 
 void MainWindow::OnTextFormatItalic(wxCommandEvent& event) {
     wxRichTextAttr attr;
+    attr.SetFont(FontManager::GetEmojiFont());
     attr.SetFontStyle(wxFONTSTYLE_ITALIC);
     ApplyTextStyle(attr);
 }
 
 void MainWindow::OnTextFormatUnderline(wxCommandEvent& event) {
     wxRichTextAttr attr;
+    attr.SetFont(FontManager::GetEmojiFont());
     attr.SetFontUnderlined(true);
     ApplyTextStyle(attr);
 }
 
 void MainWindow::OnSmiley(wxCommandEvent& event) {
-    //список смайликов
     auto smileys = bbcode::GetSmileys();
 
+    // Создаем меню с иконками и описанием
     wxMenu menu;
-    std::map<int, wxString> id_to_smiley;
+    std::map<int, bbcode::Smiley> id_to_smiley;
+
     for (const auto& smiley : smileys) {
         int id = wxWindow::NewControlId();
-        menu.Append(id, smiley.emoji);
-        id_to_smiley[id] = smiley.emoji;
+
+        // Создаем элемент меню с иконкой и текстом
+        wxMenuItem* item = new wxMenuItem(&menu, id,
+            wxString::Format("%s\t%s", smiley.emoji, smiley.description));
+
+        // Добавляем всплывающую подсказку
+        item->SetHelp(smiley.description);
+
+        menu.Append(item);
+        id_to_smiley[id] = smiley;
     }
 
-        // Обработчик с установкой фокуса
+    // Обработчик выбора
     menu.Bind(wxEVT_MENU, [this, id_to_smiley](wxCommandEvent& e) {
         auto it = id_to_smiley.find(e.GetId());
         if (it == id_to_smiley.end()) return;
 
-        wxString smiley = it->second;
-
-        // Сохраняем текущую позицию курсора
-        long start, end;
-        input_field_->GetSelection(&start, &end);
-
-        // Устанавливаем фокус на поле ввода
-        input_field_->SetFocus();
-
-        // Вставляем смайлик
-        input_field_->WriteText(smiley);
-
-        // Восстанавливаем позицию курсора
-        if (start == end) {
-            input_field_->SetInsertionPoint(start + smiley.length());
-        }
-        else {
-            input_field_->SetSelection(start + smiley.length(), start + smiley.length());
-        }
-   
+        const auto& smiley = it->second;
+        InsertTextAtCaret(smiley.emoji);
         });
 
+    // Показываем меню
     text_style_smiley_button_->PopupMenu(&menu);
+    ////список смайликов
+    //auto smileys = bbcode::GetSmileys();
+
+    //wxMenu menu;
+    //std::map<int, wxString> id_to_smiley;
+    //for (const auto& smiley : smileys) {
+    //    int id = wxWindow::NewControlId();
+    //    menu.Append(id, smiley.emoji);
+    //    id_to_smiley[id] = smiley.emoji;
+    //}
+
+    //    // Обработчик с установкой фокуса
+    //menu.Bind(wxEVT_MENU, [this, id_to_smiley](wxCommandEvent& e) {
+    //    auto it = id_to_smiley.find(e.GetId());
+    //    if (it == id_to_smiley.end()) return;
+
+    //    wxString smiley = it->second;
+
+    //    // Сохраняем текущую позицию курсора
+    //    long start, end;
+    //    input_field_->GetSelection(&start, &end);
+
+    //    // Устанавливаем фокус на поле ввода
+    //    input_field_->SetFocus();
+
+    //    // Вставляем смайлик
+    //    input_field_->WriteText(smiley);
+
+    //    // Восстанавливаем позицию курсора
+    //    if (start == end) {
+    //        input_field_->SetInsertionPoint(start + smiley.length());
+    //    }
+    //    else {
+    //        input_field_->SetSelection(start + smiley.length(), start + smiley.length());
+    //    }
+   
+    //    });
+
+    //text_style_smiley_button_->PopupMenu(&menu);
+}
+
+void MainWindow::InsertTextAtCaret(const wxString& text) {
+    // Сохраняем текущую позицию курсора
+    long start, end;
+    input_field_->GetSelection(&start, &end);
+
+    // Устанавливаем фокус на поле ввода
+    input_field_->SetFocus();
+
+    // Вставляем текст
+    input_field_->WriteText(text);
+
+    // Восстанавливаем позицию курсора
+    long new_pos = start + text.length();
+    input_field_->SetSelection(new_pos, new_pos);
 }
 
 void MainWindow::ApplyTextStyle(const wxTextAttr& attr) {
@@ -682,8 +813,9 @@ void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
     wxString selected_user = users_listbox_->GetString(selection);
 
     // Проверка, что это не текущий пользователь
-    if (selected_user.EndsWith("(Вы)")) {
-        wxMessageBox("Нельзя создать приватный чат с самим собой", "Ошибка", wxICON_WARNING);
+    if (selected_user.EndsWith(wxString::FromUTF8("(Вы)"))) {
+        wxMessageBox(wxString::FromUTF8("Нельзя создать приватный чат с самим собой"), 
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         return;
     }
 
@@ -692,7 +824,7 @@ void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
 
     // Создаем контекстное меню
     wxMenu menu;
-    menu.Append(CustomIDs::ID_CREATE_PRIVATE_CHAT, "Создать чат с " + selected_user);
+    menu.Append(CustomIDs::ID_CREATE_PRIVATE_CHAT, wxString::FromUTF8("Создать чат с ") + selected_user);
 
     // Обработчик выбора пункта меню
     menu.Bind(wxEVT_MENU, [this, selected_user](wxCommandEvent&) {
@@ -720,7 +852,7 @@ void MainWindow::UpdateRoomList(const std::set<std::string>& rooms) {
     }
 
     // Создаем диалог выбора комнат
-    ListSelectionDialog dlg(this, "Доступные комнаты", realrooms, existing_rooms);
+    ListSelectionDialog dlg(this, wxString::FromUTF8("Доступные комнаты"), realrooms, existing_rooms);
 
     if (dlg.ShowModal() == wxID_OK) {
         wxString room_name = dlg.GetSelectedItem();
@@ -732,12 +864,20 @@ void MainWindow::UpdateRoomList(const std::set<std::string>& rooms) {
 }
 
 void MainWindow::EnterRoom(bool success, const std::string& room_name) {
+
+    std::cout << "\n\n\n" << room_name << "\n\n\n";
+
     if (success) {
         std::cerr <<"[MAIN]: " << current_username_ << " вошел в комнату \"" << room_name << "\"\n";
         ChatRoomPanel* room_panel = new ChatRoomPanel(room_notebook_, room_name);
-        room_notebook_->AddPage(room_panel, room_name, true);
+        wxString wx_room_name = wxString::FromUTF8(room_name.c_str());
+        room_notebook_->AddPage(room_panel, wx_room_name, true);
+        //room_notebook_->AddPage(room_panel, room_name, true);
         rooms_[room_name] = room_panel;
-        client_->RequestUsersForRoom(room_name);
+        
+        std::cout << "--==ROOM CREATE, NOW SEND REQ FOR USERS==--\n";
+
+        //client_->RequestUsersForRoom(room_name);
     }
 }
 
@@ -763,13 +903,17 @@ void MainWindow::ChangeName(bool success, const std::string& new_name) {
     std::cout << " change name \n";
     if (success) {
         current_username_ = new_name;
-        SetTitle(wxString::Format("Чат клиента - %s", current_username_));
-
+        SetTitleMainWindow(current_username_);
     }
 }
 
+
 void MainWindow::CreatePrivateChat(const wxString& username) {
-    EnterRoom(true, username.ToStdString());
+    std::string target_user = username.ToUTF8().data();
+    EnterRoom(true, target_user);
 }
+
+
+
 
 }// end namespace gui

@@ -1,6 +1,5 @@
-#include <iostream>
-#include <boost/asio.hpp>
 #include "ClientApp.h"
+#include <wx/fontmap.h>
 
 int main(int argc, char* argv[]) {
 
@@ -10,10 +9,22 @@ int main(int argc, char* argv[]) {
     // Для C++ потоков
     std::locale::global(std::locale("ru_RU.UTF-8"));
 
-    wxApp::SetInstance(new ClientApp());
-    wxEntryStart(argc, argv);
-    wxTheApp->OnInit();
-    wxTheApp->OnRun();
-    wxEntryCleanup();
-    return 0;
+    wxDISABLE_DEBUG_SUPPORT();
+    wxInitializer initializer;
+    if (!initializer.IsOk()) {
+        std::cerr << "Failed to initialize wxWidgets" << std::endl;
+        return -1;
+    }
+
+    // Создание и запуск приложения
+    ClientApp* app = new ClientApp();
+    wxApp::SetInstance(app);
+    return wxEntry(argc, argv);
+
+    //wxApp::SetInstance(new ClientApp());
+    //wxEntryStart(argc, argv);
+    //wxTheApp->OnInit();
+    //wxTheApp->OnRun();
+    //wxEntryCleanup();
+    //return 0;
 }
