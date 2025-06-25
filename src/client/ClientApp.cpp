@@ -21,6 +21,7 @@ bool ClientApp::OnInit() {
         std::string hash = ssl::HashPassword(password.ToStdString());
 
         std::cout << "Creating ChatClient...\n";
+        std::cout << "server: " << server << " user: " << username << " hash: " << hash << '\n';
         auto client = std::make_unique<client::ChatClient>(server.ToStdString());
 
         std::cout << "Creating MainWindow...\n";

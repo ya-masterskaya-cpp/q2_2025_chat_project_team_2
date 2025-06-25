@@ -63,6 +63,7 @@ private:
     wxButton* text_style_smiley_button_;
 
     void ConstructInterface();
+    void SetTitleMainWindow(const std::string& name);
     void OnSendMessage(wxCommandEvent& event);
     void OnCreateRoom(wxCommandEvent& event);
     void OnRoomList(wxCommandEvent& event);
