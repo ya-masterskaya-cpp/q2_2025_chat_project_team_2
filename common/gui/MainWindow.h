@@ -4,6 +4,7 @@
 #include <wx/richtext/richtextctrl.h>
 #include <wx/font.h>
 #include <wx/encinfo.h>
+#include <wx/taskbar.h>
 #include <map>
 #include "LoginDialog.h"
 #include "ChatClient.h"
@@ -42,6 +43,9 @@ private:
     wxStaticText* message_length_label_;
     std::string current_username_;
     std::string hash_password_;
+
+    //tray
+    wxTaskBarIcon* tray_icon_ = nullptr;
 
     //списки пользователей
     wxListBox* users_listbox_;
@@ -97,8 +101,12 @@ private:
 
     wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl);
     int CountUsefulChars(const wxString& text) const;
-    bool IsPrivateRoom(const std::string& name) const;
 
+    //методы для взаимодействия с треем
+    void CreateTrayIcon();
+    void RemoveTrayIcon();
+    void RestoreFromTray();
+    void OnTrayIconDoubleClick(wxTaskBarIconEvent& event);
 };
 
 }//end namespace gui

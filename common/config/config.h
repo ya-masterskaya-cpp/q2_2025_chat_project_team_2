@@ -16,8 +16,6 @@ const std::string DEF_SERVER = "127.0.0.1";
 const std::string CLIENT_FIRST_PORT = "9003";
 const std::string CLIENT_SECOND_PORT = "9002";
 
-
-
 class FontManager {
 public:
     // список лицевых имён для обычного GUI-текста

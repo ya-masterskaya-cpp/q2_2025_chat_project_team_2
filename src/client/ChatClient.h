@@ -41,6 +41,7 @@ public:
 
     void RegisterUser(const std::string& user, const std::string& password);
     void LoginUser(const std::string& user, const std::string& password);
+    void Logout();
 
 private:
     std::string server_;

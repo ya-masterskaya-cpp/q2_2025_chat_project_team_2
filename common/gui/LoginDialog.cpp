@@ -107,6 +107,20 @@ void LoginDialog::ConstructInterface() {
 
     panel->SetSizer(main_sizer);
 
+    // Загрузка иконки приложения
+    wxIcon appIcon;
+#if defined(__WXMSW__)
+    appIcon = wxIcon("APP_ICON", wxBITMAP_TYPE_ICO_RESOURCE);
+#elif defined(__WXGTK__)
+    appIcon = wxIcon(wxString("resources/icon.png"), wxBITMAP_TYPE_PNG);
+#elif defined(__WXOSX__)
+    appIcon = wxIcon(wxString("resources/icon.icns"), wxBITMAP_TYPE_ICON);
+#endif
+
+    if (appIcon.IsOk()) {
+        SetIcon(appIcon);
+    }
+
     //биндинг событий
     login_button_->Bind(wxEVT_BUTTON, &LoginDialog::OnLogin, this);
     cancel_button_->Bind(wxEVT_BUTTON, &LoginDialog::OnCancel, this);
@@ -415,6 +429,10 @@ bool LoginDialog::HandleNetworkMessage(const std::string& json_msg) {
             }
             else if (answer == "err" && j.contains("reason") && j["reason"] == "user exists") {
                 wxMessageBox(wxString::FromUTF8("Такой пользователь уже авторизирован в системе"),
+                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
+            }
+            else if (answer == "err" && j.contains("reason") && j["reason"] == "wrong login or password") {
+                wxMessageBox(wxString::FromUTF8("Не верный логин или пароль"),
                     wxString::FromUTF8("Ошибка"), wxICON_ERROR);
             }
             else {

@@ -42,7 +42,10 @@ struct OutgoingMessage {
     }
 };
 
-//для контекстного меню
+//для контекстного меню 1-32767
 enum CustomIDs {
-    ID_CREATE_PRIVATE_CHAT = 10000
+    ID_CREATE_PRIVATE_CHAT = 10000,
+    ID_TRAY_RESTORE = 10100,
+    ID_TRAY_EXIT = 10101
 };
+

@@ -103,7 +103,9 @@ void ChatClient::LoginUser(const std::string& user, const std::string& password)
     network_client_->login_user(user, password);
 }
 
-
+void ChatClient::Logout() {
+    network_client_->leave_chat();
+}
 
 void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
     
@@ -151,7 +153,7 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
                 if (j["answer"] == "OK" && j.contains("name")) {
                     msg.room = MAIN_ROOM_NAME;
                     msg.sender = SYSTEM_SENDER_NAME;
-                    msg.text = username  + wxString::FromUTF8(", добро пожаловать на сервер ") + server_;
+                    msg.text = username  + ", добро пожаловать на сервер " + server_;
                 }
                 message_handler_(msg);
 
