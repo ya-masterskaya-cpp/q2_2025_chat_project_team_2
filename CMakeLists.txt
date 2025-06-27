@@ -145,6 +145,13 @@ target_link_libraries(client PRIVATE
 	GUILib
 )
 
+# Для Windows явно указываем подсистему - собираем как окно без консоли
+if(WIN32)
+    set_target_properties(client PROPERTIES
+        LINK_FLAGS "/SUBSYSTEM:WINDOWS"
+    )
+endif()
+
 add_executable(server 
 	src/server/main.cpp
 )

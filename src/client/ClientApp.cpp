@@ -1,6 +1,44 @@
 #include "ClientApp.h"
+#include <iostream>
+#include <fstream>
+
+#ifdef _WIN32
+#include <windows.h> // Для работы с консолью Windows
+#endif
+
+void ClientApp::OnInitCmdLine(wxCmdLineParser& parser) {
+    wxApp::OnInitCmdLine(parser);
+    parser.SetDesc([] {
+        static wxCmdLineEntryDesc desc[] = {
+            { wxCMD_LINE_SWITCH, "c", "console", "run in console mode" },
+            { wxCMD_LINE_NONE }
+        };
+        return desc;
+        }());
+}
+
+bool ClientApp::OnCmdLineParsed(wxCmdLineParser& parser) {
+    console_mode_ = parser.Found("console") || parser.Found("c");
+    return wxApp::OnCmdLineParsed(parser);
+}
 
 bool ClientApp::OnInit() {
+
+    // Активируем консоль, если запрошен консольный режим
+    if (console_mode_) {
+#ifdef _WIN32
+        if (AttachConsole(ATTACH_PARENT_PROCESS) || AllocConsole()) {
+            freopen("CONOUT$", "w", stdout);
+            freopen("CONOUT$", "w", stderr);
+            std::ios::sync_with_stdio(true);
+            std::cout.clear();
+            std::cerr.clear();
+        }
+#else
+        // Для Linux/MacOS просто используем стандартные потоки
+        std::ios::sync_with_stdio(true);
+#endif
+    }
 
     std::cout << "ClientApp starting...\n";
     try {
@@ -21,7 +59,6 @@ bool ClientApp::OnInit() {
         std::string hash = ssl::HashPassword(password.ToStdString());
 
         std::cout << "Creating ChatClient...\n";
-        std::cout << "server: " << server << " user: " << username << " hash: " << hash << '\n';
         auto client = std::make_unique<client::ChatClient>(server.ToStdString());
 
         std::cout << "Creating MainWindow...\n";
@@ -40,10 +77,15 @@ bool ClientApp::OnInit() {
             "Ошибка", wxICON_ERROR);
         return false;
     }
-
 }
 
 int ClientApp::OnExit() {
-    wxApp::OnExit();
-    return 0;
+    if (console_mode_) {
+#ifdef _WIN32
+        FreeConsole(); // Закрываем консоль при выходе
+#endif
+    }
+    return wxApp::OnExit();
 }
+
+wxIMPLEMENT_APP(ClientApp);
