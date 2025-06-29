@@ -3,11 +3,13 @@
 #include "db.hpp"
 #include "time_utils.hpp"
 
+
 TEST_CASE("DB initialization") {
     db::DB db(":memory:");
     REQUIRE(db.OpenDB() == true);
     REQUIRE(db.GetVersionDB().empty() == false);
 }
+
 TEST_CASE("User management 1") {
     db::DB db(":memory:");
     db.OpenDB();
@@ -17,31 +19,60 @@ TEST_CASE("User management 1") {
         "hash", "user", false, utime::GetUnixTimeNs()
     };
 
-    SECTION("Create user") {
-        REQUIRE(db.CreateUser(test_user) == true);
-        REQUIRE(db.IsUser("test_login") == true);
-    }
+   SECTION("Create user") {
+       REQUIRE(db.CreateUser(test_user) == true);
+       REQUIRE(db.IsUser("test_login") == true);
+   }
 
-    SECTION("Delete user. User don`t have messages in rooms") {
-        db.CreateUser(test_user);
-        REQUIRE(db.GetAllUsers().size() == 1);
-        REQUIRE(db.DeleteUser("test_login") == true);
-        REQUIRE(db.IsUser("test_login") == false);
-        REQUIRE(db.GetAllUsers().empty() == true);
-    }
+   SECTION("Delete user. User don`t have messages in rooms") {
+       db.CreateUser(test_user);
+       REQUIRE(db.GetAllUsers().size() == 1);
+       REQUIRE(db.DeleteUser("test_login") == true);
+       REQUIRE(db.IsUser("test_login") == false);
+       REQUIRE(db.GetAllUsers().empty() == true);
+   }
+
+   SECTION("Change user name") {
+       db.CreateUser(test_user);
+       auto users = db.GetActiveUsers();
+       REQUIRE(users[0].name == "Test User");
+       REQUIRE(db.ChangeUserName("test_login", "New Name User") == true);
+       auto new_users = db.GetActiveUsers();
+       REQUIRE(new_users[0].name == "New Name User");
+   }
+
+   SECTION("Get user info") {
+       db.CreateUser(test_user);
+       auto user_info = db.GetUserData("test_login");
+       REQUIRE(user_info->name == "Test User");
+       auto user_info_not_exist = db.GetUserData("test");  // здесь выводится ошибка [GetUserData] SQL error or unexpected result (101): no more rows available, это правильно
+       REQUIRE(user_info_not_exist == std::nullopt);
+   }
+
 }
+
 TEST_CASE("Room management 1") {
     db::DB db(":memory:");
     db.OpenDB();
 
     SECTION("Create room") {
-        REQUIRE(db.CreateRoom("general", utime::GetUnixTimeNs()) == true);
-        REQUIRE(db.IsRoom("general") == true);
+        REQUIRE(db.CreateRoom("room", utime::GetUnixTimeNs()) == true);
+        REQUIRE(db.IsRoom("room") == true);
     }
 
     SECTION("Delete room") {
-        REQUIRE(db.DeleteRoom("general") == true);
-        REQUIRE(db.IsRoom("general") == false);
+        db.CreateRoom("room", utime::GetUnixTimeNs());
+        REQUIRE(db.IsRoom("room") == true);
+        REQUIRE(db.DeleteRoom("room") == true);
+        REQUIRE(db.IsRoom("room") == false);
+    }
+
+    SECTION("Change Room Name") {
+        db.CreateRoom("room", utime::GetUnixTimeNs());
+        REQUIRE(db.IsRoom("room") == true);
+        REQUIRE(db.ChangeRoomName("room", "new_room") == true);
+        REQUIRE(db.IsRoom("new_room") == true);
+        REQUIRE(db.IsRoom("room") == false);
     }
 }
 TEST_CASE("User and room management") {
@@ -123,6 +154,7 @@ TEST_CASE("Room management 2"){
         REQUIRE(db.GetUserRooms("user1").empty() == true);
     }
 }
+
 TEST_CASE("Message History and Pagination") {
 
     db::DB db(":memory:");

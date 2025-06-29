@@ -5,6 +5,32 @@
 #include <iostream>
 
 namespace sql {
+
+    static const char* CHANGE_USER_NAME = R"sql(
+        UPDATE users
+            SET name = ?
+            WHERE login = ?;
+    )sql";
+
+    static const char* CHANGE_ROOM_NAME = R"sql(
+        UPDATE rooms
+            SET room = ?
+            WHERE room = ?;
+    )sql";
+
+    static const char* GET_USER_DATA = R"sql(
+        SELECT 
+            u.login, 
+            u.name, 
+            u.password_hash, 
+            r.role, 
+            u.is_deleted, 
+            u.unixtime 
+        FROM users as u
+        JOIN roles AS r ON u.roles_id = r.roles_id
+        WHERE u.login = ?;
+    )sql";
+
     static const char* GET_ALL_USERS = R"sql(
         SELECT 
             u.login, 
@@ -62,10 +88,19 @@ namespace sql {
     static const char* GET_USER_ROOMS = R"sql(
     SELECT
         r.room
-        FROM rooms r
-        JOIN user_rooms ur ON r.rooms_id = ur.rooms_id
-        JOIN users u ON u.users_id = ur.users_id
+        FROM rooms AS r
+        JOIN user_rooms AS ur ON r.rooms_id = ur.rooms_id
+        JOIN users AS u ON u.users_id = ur.users_id
         WHERE u.login = ?;
+    )sql";
+
+    static const char* GET_ALL_PAIR_ROOMS_AND_USERS = R"sql(
+    SELECT
+        r.room,
+        u.login
+        FROM user_rooms AS ur
+        JOIN rooms AS r ON ur.rooms_id = r.rooms_id 
+        JOIN users AS u ON ur.users_id = u.users_id;
     )sql";
 
     static const char* CREATE_USER = R"sql(
@@ -376,6 +411,41 @@ namespace db {
         return sqlite3_column_int(stmt.Get(), 0) != 0;
     }
 
+    bool DB::ChangeUserName(const std::string& user_login, const std::string& new_name) {
+        Stmt stmt(db_, sql::CHANGE_USER_NAME);
+        stmt.Bind(1, new_name);
+        stmt.Bind(2, user_login);
+        bool success = sqlite3_step(stmt.Get()) == SQLITE_DONE;
+        return success;
+    }
+
+    bool DB::ChangeRoomName(const std::string& current_room_name, const std::string& new_room_name) {
+        Stmt stmt(db_, sql::CHANGE_ROOM_NAME);
+        stmt.Bind(1, new_room_name);
+        stmt.Bind(2, current_room_name);
+        bool success = sqlite3_step(stmt.Get()) == SQLITE_DONE;
+        return success;
+    }
+        
+    std::optional<User> DB::GetUserData(const std::string& user_login) {
+        Stmt stmt(db_, sql::GET_USER_DATA);
+        stmt.Bind(1, user_login);
+        int rc = sqlite3_step(stmt.Get());
+
+        if (rc == SQLITE_ROW) {
+            std::string login = stmt.GetColumnText(0);
+            std::string name = stmt.GetColumnText(1);
+            std::string password_hash = stmt.GetColumnText(2);
+            std::string role = stmt.GetColumnText(3);
+            bool is_deleted = sqlite3_column_int(stmt.Get(), 4) != 0;
+            int64_t unixtime = sqlite3_column_int64(stmt.Get(), 5);
+            return User{ login, name, password_hash, role, is_deleted, unixtime };
+        }
+        std::cerr << "[GetUserData] SQL error or unexpected result (" << rc << "): "
+            << sqlite3_errmsg(db_) << "\n";
+        return std::nullopt;
+    }
+
     std::vector<User> DB::GetUsers(const char* sql) {
         std::vector<User> users;
         Stmt stmt(db_, sql);
@@ -419,6 +489,20 @@ namespace db {
             std::cerr << "SQL error during fetch: " << sqlite3_errmsg(db_) << "\n";
         }
         return result;
+    }
+
+    std::unordered_map<std::string, std::unordered_set<std::string>> DB::GetAllRoomWithRegisteredUsers() {
+        std::unordered_map<std::string, std::unordered_set<std::string>> list_room_and_user;
+
+        Stmt stmt(db_, sql::GET_ALL_PAIR_ROOMS_AND_USERS);
+        int rc;
+        while ((rc = sqlite3_step(stmt.Get())) == SQLITE_ROW) {
+            list_room_and_user[stmt.GetColumnText(0)].insert(stmt.GetColumnText(1));
+        }
+        if (rc != SQLITE_DONE) {
+            std::cerr << "SQL error during fetch: " << sqlite3_errmsg(db_) << "\n";
+        }
+        return list_room_and_user;
     }
 
     std::vector<User> DB::GetRoomActiveUsers(const std::string& room) {
