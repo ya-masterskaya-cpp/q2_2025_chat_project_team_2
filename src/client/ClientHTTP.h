@@ -12,6 +12,7 @@
 #include <condition_variable>
 #include <thread>
 #include "General.h"
+#include "common_struct.h"
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
@@ -55,25 +56,6 @@ struct MesQueue
             msg_.clear();      
         }
     }
-};
-
-struct MesBuilder
-{
-    MesBuilder(int type) {
-        j["type"] = type;
-    }
-    MesBuilder& add(const std::string key, const std::string value) {
-        j[key] = value;
-        return *this;
-    }
-    MesBuilder& add(const std::string& key, const std::vector<std::string>& value) {
-        j[key] = value;
-        return *this;
-    }
-    std::string toString() {
-        return j.dump();
-    }
-    nlohmann::json j;
 };
 
 using MessageHandler = std::function<void(const std::string&)>;
@@ -152,6 +134,7 @@ public:
     }
 
     void ask_users(const std::string& room) {
+        std::cout << "REQ TO SERV USERS FOR ROOM: " << room << '\n';
         mq_.add(
             MesBuilder(ASK_USERS).add("room", room).toString()
         );

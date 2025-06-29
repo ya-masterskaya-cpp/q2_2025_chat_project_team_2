@@ -4,7 +4,7 @@
 namespace gui {
 
 RegisterDialog::RegisterDialog(wxWindow* parent, const std::string& selected_sever) :
-    wxDialog(parent, wxID_ANY, "Регистрация пользователя", wxDefaultPosition, wxSize(400,300)),
+    wxDialog(parent, wxID_ANY, wxString::FromUTF8("Регистрация пользователя"), wxDefaultPosition, wxSize(400,300)),
     server_(selected_sever){
     
     ConstructInterface();
@@ -28,7 +28,7 @@ void RegisterDialog::ConstructInterface() {
     // Добавляем информацию о сервере
     wxStaticText* server_info = new wxStaticText(
         panel, wxID_ANY,
-        wxString::Format("Регистрация на сервере: %s", server_)
+        wxString::Format(wxString::FromUTF8("Регистрация на сервере: %s"), server_)
     );
     main_sizer->Add(server_info, 0, wxALL | wxALIGN_CENTER_HORIZONTAL, 10);
 
@@ -36,15 +36,15 @@ void RegisterDialog::ConstructInterface() {
     wxFlexGridSizer* input_sizer = new wxFlexGridSizer(3, 2, 10, 15);
     input_sizer->AddGrowableCol(1, 1);
 
-    input_sizer->Add(new wxStaticText(panel, wxID_ANY, "Логин"), 0, wxALIGN_CENTER_VERTICAL);
+    input_sizer->Add(new wxStaticText(panel, wxID_ANY, wxString::FromUTF8("Логин")), 0, wxALIGN_CENTER_VERTICAL);
     username_field_ = new wxTextCtrl(panel, wxID_ANY);
     input_sizer->Add(username_field_, 1, wxEXPAND);
 
-    input_sizer->Add(new wxStaticText(panel, wxID_ANY, "Пароль:"), 0, wxALIGN_CENTER_VERTICAL);
+    input_sizer->Add(new wxStaticText(panel, wxID_ANY, wxString::FromUTF8("Пароль:")), 0, wxALIGN_CENTER_VERTICAL);
     password_field_ = new wxTextCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
     input_sizer->Add(password_field_, 1, wxEXPAND);
 
-    input_sizer->Add(new wxStaticText(panel, wxID_ANY, "Подтвердите:"), 0, wxALIGN_CENTER_VERTICAL);
+    input_sizer->Add(new wxStaticText(panel, wxID_ANY, wxString::FromUTF8("Подтвердите:")), 0, wxALIGN_CENTER_VERTICAL);
     confirm_password_field_ = new wxTextCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
     input_sizer->Add(confirm_password_field_, 1, wxEXPAND);
 
@@ -54,8 +54,8 @@ void RegisterDialog::ConstructInterface() {
     wxBoxSizer* button_sizer = new wxBoxSizer(wxHORIZONTAL);
     button_sizer->AddStretchSpacer();
 
-    cancel_button_ = new wxButton(panel, wxID_CANCEL, "Отмена");
-    register_button_ = new wxButton(panel, wxID_CANCEL, "Зарегистрировать");
+    cancel_button_ = new wxButton(panel, wxID_CANCEL, wxString::FromUTF8("Отмена"));
+    register_button_ = new wxButton(panel, wxID_CANCEL, wxString::FromUTF8("Зарегистрировать"));
 
     button_sizer->Add(register_button_, 0, wxRIGHT, 10);
     button_sizer->Add(cancel_button_, 0);
@@ -73,12 +73,14 @@ void RegisterDialog::ConstructInterface() {
 
 void RegisterDialog::OnRegister(wxCommandEvent& event) {
     if (username_field_->IsEmpty() || password_field_->IsEmpty() || confirm_password_field_->IsEmpty()) {
-        wxMessageBox("Все поля должны быть заполнены", "Ошибка", wxICON_ERROR);
+        wxMessageBox(wxString::FromUTF8("Все поля должны быть заполнены"), 
+            wxString::FromUTF8("Ошибка"), wxICON_ERROR);
         return;
     }
 
     if (password_field_->GetValue() != confirm_password_field_->GetValue()) {
-        wxMessageBox("Пароли не совпадают", "Ошибка", wxICON_ERROR);
+        wxMessageBox(wxString::FromUTF8("Пароли не совпадают"),
+            wxString::FromUTF8("Ошибка"), wxICON_ERROR);
         return;
     }
 
@@ -131,14 +133,17 @@ void RegisterDialog::HandleNetworkMessage(const std::string& json_msg) {
             std::string text_register_ = j["what"].get<std::string>();
 
             if (answer == "OK") {
-                wxMessageBox("Регистрация прошла успешно!", "Успех", wxICON_INFORMATION);
+                wxMessageBox(wxString::FromUTF8("Регистрация прошла успешно!"),
+                    wxString::FromUTF8("Успех"), wxICON_INFORMATION);
                 EndModal(wxID_OK);
             }
             else if(answer == "err" && j.contains("reason") && j["reason"] == "login exists") {
-                wxMessageBox("Пользователь с таким именем уже существует", "Ошибка", wxICON_ERROR);
+                wxMessageBox(wxString::FromUTF8("Пользователь с таким именем уже существует"), 
+                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
             }
             else {
-                wxMessageBox("Невозможно подключиться к серверу", "Ошибка", wxICON_ERROR);
+                wxMessageBox(wxString::FromUTF8("Невозможно подключиться к серверу"), 
+                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
             }
         }
         else {

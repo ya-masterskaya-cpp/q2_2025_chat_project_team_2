@@ -18,15 +18,17 @@ ListSelectionDialog::ListSelectionDialog(wxWindow* parent,
 
     // Заполняем список и отмечаем существующие элементы
     for (const auto& item : items) {
-        if (existing_items.find(item) != existing_items.end()) {
+        //std::string norm_item = to_utf8(item);
+        wxString norm_item = wxString::FromUTF8(item);
+        if (existing_items.find(norm_item) != existing_items.end()) {
             // Элемент уже существует - добавляем с пометкой
-            list_box_->Append(item + " (уже добавлено)");
-            list_box_->SetClientObject(list_box_->GetCount() - 1, new wxStringClientData(item, true));
+            list_box_->Append(norm_item + wxString::FromUTF8(" (уже добавлено)"));
+            list_box_->SetClientObject(list_box_->GetCount() - 1, new wxStringClientData(norm_item, true));
         }
         else {
             // Новый элемент
-            list_box_->Append(item);
-            list_box_->SetClientObject(list_box_->GetCount() - 1, new wxStringClientData(item, false));
+            list_box_->Append(norm_item);
+            list_box_->SetClientObject(list_box_->GetCount() - 1, new wxStringClientData(norm_item, false));
         }
     }
 
@@ -36,8 +38,8 @@ ListSelectionDialog::ListSelectionDialog(wxWindow* parent,
     wxBoxSizer* button_sizer = new wxBoxSizer(wxHORIZONTAL);
     button_sizer->AddStretchSpacer();
 
-    cancel_button_ = new wxButton(panel, wxID_CANCEL, "Отменить");
-    add_button_ = new wxButton(panel, wxID_OK, "Добавить");
+    cancel_button_ = new wxButton(panel, wxID_CANCEL, wxString::FromUTF8("Отменить"));
+    add_button_ = new wxButton(panel, wxID_OK, wxString::FromUTF8("Добавить"));
     add_button_->Enable(false); // Изначально неактивна
 
     button_sizer->Add(add_button_, 0, wxRIGHT, 10);

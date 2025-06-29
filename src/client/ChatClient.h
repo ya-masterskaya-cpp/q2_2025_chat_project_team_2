@@ -10,6 +10,7 @@ namespace client {
 
 class ChatClient {
 public:
+    using LoginHandler = std::function<void(const std::string&)>;
     using MessageHandler = std::function<void(const IncomingMessage&)>;
     using RoomListHandler = std::function<void(const std::set<std::string>&)>;
     using RoomCreateHandler = std::function<void(bool, const std::string&)>;
@@ -21,6 +22,7 @@ public:
 
     ChatClient(const std::string& server);
 
+    void SetLoginHandler(LoginHandler handler);
     void SetMessageHandler(MessageHandler handler);
     void SetRoomListHandler(RoomListHandler handler);
     void SetRoomCreateHandler(RoomCreateHandler handler);
@@ -39,10 +41,12 @@ public:
 
     void RegisterUser(const std::string& user, const std::string& password);
     void LoginUser(const std::string& user, const std::string& password);
+    void Logout();
 
 private:
     std::string server_;
     std::unique_ptr<Client> network_client_;
+    LoginHandler login_handler_;
     MessageHandler message_handler_;
     RoomListHandler room_list_handler_;
     RoomCreateHandler room_create_handler_;

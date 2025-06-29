@@ -3,198 +3,242 @@
 namespace gui {
 namespace bbcode {
 
+//std::vector<Smiley> GetSmileys() {
+//    return {
+//        { ":smile:", wxString::FromUTF8("😊") },
+//        { ":laugh:", wxString::FromUTF8("😂") },
+//        { ":heart:", wxString::FromUTF8("❤️") },
+//        { ":thumbup:", wxString::FromUTF8("👍") },
+//        { ":wave:", wxString::FromUTF8("👋") },
+//        { ":party:", wxString::FromUTF8("🎉") },
+//        { ":thinking:", wxString::FromUTF8("🤔") },
+//        { ":cool:", wxString::FromUTF8("😎") },
+//        { ":rofl:", wxString::FromUTF8("🤣") },
+//        { ":love:", wxString::FromUTF8("😍") },
+//        { ":cry:", wxString::FromUTF8("😢") },
+//        { ":angry:", wxString::FromUTF8("😠") },
+//        { ":clap:", wxString::FromUTF8("👏" )},
+//        { ":pray:", wxString::FromUTF8("🙏") },
+//        { ":strong:", wxString::FromUTF8("💪") },
+//        { ":eyes:", wxString::FromUTF8("👀") },
+//        { ":target:", wxString::FromUTF8("🎯") },
+//        { ":fire:", wxString::FromUTF8("🔥") },
+//        { ":rainbow:", wxString::FromUTF8("🌈") },
+//        { ":star:", wxString::FromUTF8("⭐") }
+//    };
+//}
+
 std::vector<Smiley> GetSmileys() {
     return {
-        { ":smile:", "😊" },
-        { ":laugh:", "😂" },
-        { ":heart:", "❤️" },
-        { ":thumbup:", "👍" },
-        { ":wave:", "👋" },
-        { ":party:", "🎉" },
-        { ":thinking:", "🤔" },
-        { ":cool:", "😎" },
-        { ":rofl:", "🤣" },
-        { ":love:", "😍" },
-        { ":cry:", "😢" },
-        { ":angry:", "😠" },
-        { ":clap:", "👏" },
-        { ":pray:", "🙏" },
-        { ":strong:", "💪" },
-        { ":eyes:", "👀" },
-        { ":target:", "🎯" },
-        { ":fire:", "🔥" },
-        { ":rainbow:", "🌈" },
-        { ":star:", "⭐" }
+        { wxString::FromUTF8("😊"), "[smile]", "", wxString::FromUTF8("Улыбка") },
+        { wxString::FromUTF8("😂"), "[laugh]", "", wxString::FromUTF8("Смех") },
+        { wxString::FromUTF8("😢"), "[cry]", "", wxString::FromUTF8("Плач") },
+        { wxString::FromUTF8("😠"), "[angry]", "", wxString::FromUTF8("Злость") },
+        { wxString::FromUTF8("😍"), "[love]", "", wxString::FromUTF8("Влюбленность") },
+        { wxString::FromUTF8("😎"), "[cool]", "", wxString::FromUTF8("Круто") },
+        { wxString::FromUTF8("🤔"), "[think]", "", wxString::FromUTF8("Размышление") },
+        { wxString::FromUTF8("👍"), "[thumbsup]", "", wxString::FromUTF8("Одобрение") },
+        { wxString::FromUTF8("👎"), "[thumbsdown]", "", wxString::FromUTF8("Неодобрение") },
+        { wxString::FromUTF8("❤️"), "[heart]", "", wxString::FromUTF8("Сердце") },
+        { wxString::FromUTF8("🎉"), "[party]", "", wxString::FromUTF8("Праздник") },
+        { wxString::FromUTF8("🔥"), "[fire]", "", wxString::FromUTF8("Огонь") },
+        // Добавьте больше смайлов по необходимости
     };
 }
 
+//currect
 wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl) {
     wxString result;
-    long start = 0, end = ctrl->GetLastPosition();
+    wxRichTextBuffer* buffer = &ctrl->GetBuffer();
 
-    //флаги для отслеживания стиля
-    bool is_bold = false;
-    bool is_italic = false;
-    bool is_underline = false;
+    if (!buffer || ctrl->IsEmpty()) return result;
 
-    wxRichTextAttr prev_attr;
-    if (end > 0) ctrl->GetStyle(0, prev_attr);
+    // Итератор по всем элементам буфера
+    wxRichTextObjectList::compatibility_iterator node = buffer->GetChildren().GetFirst();
+    while (node) {
+        if (wxRichTextParagraph* para = wxDynamicCast(node->GetData(), wxRichTextParagraph)) {
+            // Обрабатываем все дочерние элементы параграфа
+            wxRichTextObjectList::compatibility_iterator child_node = para->GetChildren().GetFirst();
+            while (child_node) {
+                wxRichTextObject* obj = child_node->GetData();
+                const wxRichTextRange& range = obj->GetRange();
 
-    for (long pos = start; pos < end; pos++) {
-        wxRichTextAttr attr;
-        ctrl->GetStyle(pos, attr);
+                // Получаем текст для диапазона
+                wxString text_fragment = ctrl->GetRange(range.GetStart(), range.GetEnd());
 
-        // Проверяем изменения стиля
-        if (attr.GetFontWeight() != prev_attr.GetFontWeight()) {
-            if (attr.GetFontWeight() == wxFONTWEIGHT_BOLD && !is_bold) {
-                result += "[b]";
-                is_bold = true;
+                // Пропускаем пустые фрагменты (например, пустые строки)
+                if (!text_fragment.IsEmpty()) {
+                    const wxRichTextAttr& attr = obj->GetAttributes();
+
+                    // Открываем теги стилей
+                    if (attr.GetFontWeight() == wxFONTWEIGHT_BOLD) result += "[b]";
+                    if (attr.GetFontStyle() == wxFONTSTYLE_ITALIC) result += "[i]";
+                    if (attr.GetFontUnderlined()) result += "[u]";
+
+                    // Экранирование специальных символов
+                    text_fragment.Replace("[", "\\[");
+                    text_fragment.Replace("]", "\\]");
+                    text_fragment.Replace("\\", "\\\\");
+
+                    result += text_fragment;
+
+                    // Закрываем теги
+                    if (attr.GetFontUnderlined()) result += "[/u]";
+                    if (attr.GetFontStyle() == wxFONTSTYLE_ITALIC) result += "[/i]";
+                    if (attr.GetFontWeight() == wxFONTWEIGHT_BOLD) result += "[/b]";
+                }
+                child_node = child_node->GetNext();
             }
-            else if (is_bold) {
-                result += "[/b]";
-                is_bold = false;
-            }
-        }
 
-        if (attr.GetFontStyle() != prev_attr.GetFontStyle()) {
-            if (attr.GetFontStyle() == wxFONTSTYLE_ITALIC && !is_italic) {
-                result += "[i]";
-                is_italic = true;
-            }
-            else if (is_italic) {
-                result += "[/i]";
-                is_italic = false;
+            // Добавляем перенос строки между параграфами
+            if (node->GetNext()) {
+                result += "\n";
             }
         }
-
-        if (attr.GetFontUnderlined() != prev_attr.GetFontUnderlined()) {
-            if (attr.GetFontUnderlined() && !is_underline) {
-                result += "[u]";
-                is_underline = true;
-            }
-            else if (is_underline) {
-                result += "[/u]";
-                is_underline = false;
-            }
-        }
-
-        prev_attr = attr;
-
-        // Обработка символа
-        wxChar ch = ctrl->GetValue()[pos];
-        if (ch == '[') {
-            result += "\\[";
-        }
-        else if (ch == ']') {
-            result += "\\]";
-        }
-        else if (ch == '\\') {
-            result += "\\\\";
-        }
-        else {
-            result += ch;
-        }
+        node = node->GetNext();
     }
 
-    // Закрываем все открытые теги
-    if (is_underline) result += "[/u]";
-    if (is_italic) result += "[/i]";
-    if (is_bold) result += "[/b]";
+    // Убедимся, что обработан весь текст
+    const wxString full_text = ctrl->GetValue();
+    if (result.length() < full_text.length()) {
+        wxString remaining = full_text.Mid(result.length());
+        remaining.Replace("[", "\\[");
+        remaining.Replace("]", "\\]");
+        remaining.Replace("\\", "\\\\");
+        result += remaining;
+    }
 
     return result;
 }
 
 void ParseBBCode(const wxString& text, wxRichTextCtrl* display_field) {
+    // Подготовка карты смайлов: [тег] -> эмодзи
     auto smileys = GetSmileys();
-    std::unordered_map<wxString, wxString> smiley_map;
-    for (const auto& s : smileys) smiley_map[s.code] = s.emoji;
-        
+    std::unordered_map<wxString, wxString> smiley_tag_map;
+    for (const auto& s : smileys) {
+        smiley_tag_map[s.bbcode_tag.Lower()] = s.emoji;
+    }
+
+    // Состояние стилей
     bool in_bold = false;
     bool in_italic = false;
     bool in_underline = false;
 
-    wxRichTextAttr base_attr;
-    base_attr.SetFontSize(10);
+    size_t i = 0;
+    const size_t len = text.length();
+    wxString text_buffer;
 
+    // Функция для записи буфера с текущими стилями
+    auto write_buffer = [&]() {
+        if (!text_buffer.IsEmpty()) {
+            if (in_bold) display_field->BeginBold();
+            if (in_italic) display_field->BeginItalic();
+            if (in_underline) display_field->BeginUnderline();
 
-    for (size_t i = 0; i < text.length(); i++) {
-        // Обработка тегов
-        if (text[i] == '[' && i + 1 < text.length()) {
-            // Тег [b]
-            if (i + 3 <= text.length() && text.Mid(i, 3) == "[b]") {
-                display_field->BeginBold();
-                in_bold = true;
-                i += 2; // Пропускаем 2 символа
-                continue;
-            }
-            // Тег [/b]
-            else if (i + 4 <= text.length() && text.Mid(i, 4) == "[/b]") {
-                if (in_bold) display_field->EndBold();
-                in_bold = false;
-                i += 3;
-                continue;
-            }
-            // Тег [i]
-            else if (i + 3 <= text.length() && text.Mid(i, 3) == "[i]") {
-                display_field->BeginItalic();
-                in_italic = true;
+            display_field->WriteText(text_buffer);
+
+            if (in_underline) display_field->EndUnderline();
+            if (in_italic) display_field->EndItalic();
+            if (in_bold) display_field->EndBold();
+
+            text_buffer.clear();
+        }
+        };
+
+    while (i < len) {
+        // Обработка экранированных символов
+        if (text[i] == '\\' && i + 1 < len) {
+            wxChar next_char = text[i + 1];
+            if (next_char == '[' || next_char == ']' || next_char == '\\') {
+                text_buffer += next_char;
                 i += 2;
-                continue;
-            }
-            // Тег [/i]
-            else if (i + 4 <= text.length() && text.Mid(i, 4) == "[/i]") {
-                if (in_italic) display_field->EndItalic();
-                in_italic = false;
-                i += 3;
-                continue;
-            }
-            // Тег [u]
-            else if (i + 3 <= text.length() && text.Mid(i, 3) == "[u]") {
-                display_field->BeginUnderline();
-                in_underline = true;
-                i += 2;
-                continue;
-            }
-            // Тег [/u]
-            else if (i + 4 <= text.length() && text.Mid(i, 4) == "[/u]") {
-                if (in_underline) display_field->EndUnderline();
-                in_underline = false;
-                i += 3;
                 continue;
             }
         }
 
-        // Обработка смайликов
-        if (text[i] == ':' && i + 1 < text.length()) {
-            size_t end_pos = text.find(':', i + 1);
-            if (end_pos != wxString::npos) {
-                wxString code = text.SubString(i, end_pos);
-                if (smiley_map.find(code) != smiley_map.end()) {
-                    display_field->WriteText(smiley_map[code]);
-                    i = end_pos; // переход на конец
-                    continue;
+        // Обработка тегов
+        if (text[i] == '[' && i + 1 < len) {
+            bool tag_processed = false;
+
+            // Закрывающие теги [/]
+            if (i + 3 < len && text[i + 1] == '/') {
+                wxString tag = text.SubString(i + 2, i + 3).Lower();
+                if (tag == "b]" && in_bold) {
+                    write_buffer();
+                    in_bold = false;
+                    i += 4;
+                    tag_processed = true;
+                }
+                else if (tag == "i]" && in_italic) {
+                    write_buffer();
+                    in_italic = false;
+                    i += 4;
+                    tag_processed = true;
+                }
+                else if (tag == "u]" && in_underline) {
+                    write_buffer();
+                    in_underline = false;
+                    i += 4;
+                    tag_processed = true;
+                }
+            }
+            // Открывающие теги
+            else if (i + 2 < len) {
+                wxString tag = text.SubString(i + 1, i + 2).Lower();
+                if (tag == "b]") {
+                    write_buffer();
+                    in_bold = true;
+                    i += 3;
+                    tag_processed = true;
+                }
+                else if (tag == "i]") {
+                    write_buffer();
+                    in_italic = true;
+                    i += 3;
+                    tag_processed = true;
+                }
+                else if (tag == "u]") {
+                    write_buffer();
+                    in_underline = true;
+                    i += 3;
+                    tag_processed = true;
+                }
+            }
+
+            // Обработка смайлов если не обработан стилевой тег
+            if (!tag_processed) {
+                // Ищем закрывающую скобку
+                size_t end_pos = i + 1;
+                while (end_pos < len && end_pos < i + 20) {
+                    if (text[end_pos] == ']') break;
+                    end_pos++;
+                }
+
+                if (end_pos < len && text[end_pos] == ']') {
+                    wxString full_tag = text.SubString(i, end_pos);
+                    wxString tag_lower = full_tag.Lower();
+
+                    // Проверяем есть ли такой тег в смайлах
+                    auto it = smiley_tag_map.find(tag_lower);
+                    if (it != smiley_tag_map.end()) {
+                        write_buffer();
+                        display_field->WriteText(it->second);
+                        i = end_pos + 1;
+                        continue;
+                    }
                 }
             }
         }
 
-        // Обработка экранированных символов
-        if (text[i] == '\\' && i + 1 < text.length()) {
-            wxChar next_char = text[i + 1];
-            if (next_char == '[' || next_char == ']' || next_char == '\\') {
-                display_field->WriteText(wxString(next_char));
-                i++; // Пропускаем экранирующий символ
-                continue;
-            }
-        }
-
         // Обычный текст
-        display_field->WriteText(wxString(text[i]));
+        if (i < len) {
+            text_buffer += text[i];
+            i++;
+        }
     }
 
-    // Закрываем все открытые теги (на всякий случай)
-    if (in_underline) display_field->EndUnderline();
-    if (in_italic) display_field->EndItalic();
-    if (in_bold) display_field->EndBold();
+    // Запись оставшегося текста
+    write_buffer();
 }
 
 } //end namespace bbcode

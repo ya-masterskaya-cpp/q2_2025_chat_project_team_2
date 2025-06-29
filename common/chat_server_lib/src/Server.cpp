@@ -1,7 +1,13 @@
 #include "Server.h"
 
-void Server::run_server() {
+void Server::run_server(db::DB& data_base) {
     logger_.logEvent("Server started");
+    
+    // подключили БД и заливаем логины с паролями, в том числе и мягко удаленных пользователей
+    db_ = &data_base;
+    for (auto& user : db_->GetAllUsers()) {
+        users_passwords_[user.login] = user.password_hash;
+    }
 
     // Добавил поддержку signal handler
     signals_.async_wait([this](const boost::system::error_code& /*ec*/, int /*signo*/) {
@@ -13,14 +19,6 @@ void Server::run_server() {
 
     std::thread(&Server::shuttle, this).detach();
     std::thread(&Server::client_accept, this).detach();
-
-    //std::string s;
-    //while (true) {
-    //    getline(std::cin, s);
-    //    if (s == "q") {
-    //        break;
-    //    }
-    //}
 
     ioc.run();  // изменил - теперь основной цикл
 
@@ -52,6 +50,7 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
             ws.read(buffer);
             nlohmann::json mes = nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
             nlohmann::json ans;
+            nlohmann::json res;
             ans["type"] = 0;
             int type = mes["type"];
             switch (type)
@@ -78,9 +77,9 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
                 ans = create_room(mes["room"]);
                 break;
             case ENTER_ROOM:
-                nlohmann::json res = enter_room(session, mes["room"]);
+                res = enter_room(session, mes["room"]);
                 session->add(res);
-                if(res["answer"] == "OK") {
+                if (res["answer"] == "OK") {
                     in_msg.add(ask_users(mes["room"]));
                 }
                 break;
@@ -186,7 +185,7 @@ void Server::change_session(MsgQueue* session, const std::string& login) {
         nlohmann::json ans = make_ok_answer(LOGIN, login);
         ans["name"] = session->name;
         session->add(ans);
-       // session->add(make_ok_answer(LOGIN, login));
+        //session->add(make_ok_answer(LOGIN, login));
         *session = *old_session;
         delete old_session;
         logger_.logEvent("Client " + login + " connected again");
@@ -238,6 +237,7 @@ nlohmann::json Server::ask_users(const std::string& room) {
     }
     return MesBuilder(ASK_USERS).add("room", room).add("users", v).j;
 }
+
 void Server::remove_user(MsgQueue* session) {
     for (auto& u : users_) {
         u.second.erase(session);

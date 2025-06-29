@@ -4,15 +4,6 @@ namespace client {
 
     ChatClient::ChatClient(const std::string& server) :
         server_(server){
-
-        //ТК у нас было подключение по 1 порту, а в реальности 2,
-        //то пока сделаем так, потом изменим
-        size_t pos = server.find(':');
-        std::string host = (pos != std::string::npos) ? server.substr(0, pos) : server;
-        std::string port = (pos != std::string::npos) ? server.substr(pos + 1) : "51001";
-
-        std::cout << "[ChatClient] Parsed server: host=" << host << ", port=" << port << "\n";
-
         network_client_ = std::make_unique<Client>();
 
         network_client_->set_handler([this](const std::string& json_msg) {
@@ -21,15 +12,18 @@ namespace client {
 
         // Подключение с использованием правильных портов
         try {
-            // Порт 9002 - для исходящих сообщений (sender)
-            // Порт 9003 - для входящих сообщений (getter)
-            network_client_->start(host, "9003", "9002");
+            network_client_->start(server_, CLIENT_FIRST_PORT, CLIENT_SECOND_PORT);
         }
         catch (const std::exception& e) {
             std::cerr << "[Network] Connection error: " << e.what() << "\n";
             throw;
         }
     }
+
+void ChatClient::SetLoginHandler(LoginHandler handler) {
+    std::cout << "[ChatClient] Setting login handler\n";
+    login_handler_ = std::move(handler);
+}
 
 void ChatClient::SetMessageHandler(MessageHandler handler) {
     std::cout << "[ChatClient] Setting message handler\n";
@@ -76,6 +70,7 @@ void ChatClient::SendMessageToServer(const OutgoingMessage& msg) {
 }
 
 void ChatClient::CreateRoom(const std::string& room_name) {
+    std::cout << "SEND REQUEST TO CREATE ROOM " << room_name << '\n';
     network_client_->create_room(room_name);
 }
 
@@ -96,6 +91,7 @@ void ChatClient::RequestRoomList() {
 }
 
 void ChatClient::RequestUsersForRoom(const std::string& room_name) {
+    std::cout << "SEND TO SERVER USER FOR ROOM: " << room_name << '\n';
     network_client_->ask_users(room_name);
 }
 
@@ -107,7 +103,9 @@ void ChatClient::LoginUser(const std::string& user, const std::string& password)
     network_client_->login_user(user, password);
 }
 
-
+void ChatClient::Logout() {
+    network_client_->leave_chat();
+}
 
 void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
     
@@ -151,12 +149,17 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
             std::cout << "[LOGIN result]: " << j["answer"] << '\n';
             if (message_handler_) {
                 std::string message = j["what"].get<std::string>();
-                if (j["answer"] == "OK") {
+                std::string username = j["name"].get<std::string>();
+                if (j["answer"] == "OK" && j.contains("name")) {
                     msg.room = MAIN_ROOM_NAME;
                     msg.sender = SYSTEM_SENDER_NAME;
-                    msg.text = j["what"].get<std::string>()+ ", добро пожаловать на сервеер " + server_;
+                    msg.text = username  + ", добро пожаловать на сервер " + server_;
                 }
                 message_handler_(msg);
+
+                if (login_handler_ && j.contains("name")) {
+                    login_handler_(username);
+                }
             }
         }
         // Обработка ответов сервера
@@ -178,7 +181,9 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
             std::cout << "[ENTER ROOM result]: " << j["answer"] << '\n';
             if (room_enter_handler_) {
                 bool success;
+
                 std::string message = j["what"].get<std::string>();
+                std::cout << "FOR ROOM: " << message << '\n';
                 if (j["answer"] == "OK") {
                     success = true;
                 }
@@ -210,8 +215,7 @@ void ChatClient::HandleNetworkMessage(const std::string& json_msg) {
             if (room_create_handler_) {
                 bool success;
                 std::string message = j["what"].get<std::string>();
-                std::string reason = j["reason"].get<std::string>();
-                if (j["answer"] == "OK" || reason == "room exists" ) {
+                if (j["answer"] == "OK") {
                     success = true;
                 }
                 else {

@@ -1,7 +1,7 @@
 #define CATCH_CONFIG_MAIN  // Должен быть только в одном файле
 #include <catch2/catch_test_macros.hpp>
-#include "../include/db.hpp"
-#include "../src/time_utils.hpp"
+#include "db.hpp"
+#include "time_utils.hpp"
 
 TEST_CASE("DB initialization") {
     db::DB db(":memory:");

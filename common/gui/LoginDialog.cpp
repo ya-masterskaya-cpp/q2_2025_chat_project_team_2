@@ -10,7 +10,7 @@
 namespace gui {
 
 LoginDialog::LoginDialog(wxWindow* parent) :
-    wxDialog(parent, wxID_ANY, "Авторизация на сервере", wxDefaultPosition, wxSize(700, 400)) {
+    wxDialog(parent, wxID_ANY, wxString::FromUTF8("Авторизация на сервере"), wxDefaultPosition, wxSize(700, 400)) {
     ConstructInterface();
     LoadConfig();
 }
@@ -21,6 +21,7 @@ void LoginDialog::ConstructInterface() {
 
     //Установка шрифта по умолчанию
     this->SetFont(DEFAULT_FONT);
+    
 
     //левая часть - поля авторизации
     wxBoxSizer* left_sizer = new wxBoxSizer(wxVERTICAL);
@@ -29,26 +30,26 @@ void LoginDialog::ConstructInterface() {
     wxFlexGridSizer* input_sizer = new wxFlexGridSizer(2, 2, 10, 15);
     input_sizer->AddGrowableCol(1, 1);
 
-    input_sizer->Add(new wxStaticText(panel, wxID_ANY, "Логин:"), 0, wxALIGN_CENTER_VERTICAL);
+    input_sizer->Add(new wxStaticText(panel, wxID_ANY, wxString::FromUTF8("Логин:")), 0, wxALIGN_CENTER_VERTICAL);
     username_field_ = new wxTextCtrl(panel, wxID_ANY);
     input_sizer->Add(username_field_, 1, wxEXPAND);
 
-    input_sizer->Add(new wxStaticText(panel, wxID_ANY, "Пароль:"), 0, wxALIGN_CENTER_VERTICAL);
+    input_sizer->Add(new wxStaticText(panel, wxID_ANY, wxString::FromUTF8("Пароль:")), 0, wxALIGN_CENTER_VERTICAL);
     password_field_ = new wxTextCtrl(panel, wxID_ANY, "", wxDefaultPosition, wxDefaultSize, wxTE_PASSWORD);
     input_sizer->Add(password_field_, 1, wxEXPAND);
 
     left_sizer->Add(input_sizer, 0, wxLEFT | wxBOTTOM, 20);
 
     //Чекбокс и кнопки
-    remember_check_ = new wxCheckBox(panel, wxID_ANY, "Запомни меня");
+    remember_check_ = new wxCheckBox(panel, wxID_ANY, wxString::FromUTF8("Запомни меня"));
     left_sizer->Add(remember_check_, 0, wxLEFT | wxBOTTOM, 20);
 
     wxBoxSizer* button_sizer = new wxBoxSizer(wxHORIZONTAL);
     button_sizer->AddStretchSpacer();
 
-    cancel_button_ = new wxButton(panel, wxID_CANCEL, "Отмена");
-    login_button_ = new wxButton(panel, wxID_OK, "Войти");
-    register_button_ = new wxButton(panel, wxID_ANY, "Регистрация");
+    cancel_button_ = new wxButton(panel, wxID_CANCEL, wxString::FromUTF8("Отмена"));
+    login_button_ = new wxButton(panel, wxID_OK, wxString::FromUTF8("Войти"));
+    register_button_ = new wxButton(panel, wxID_ANY, wxString::FromUTF8("Регистрация"));
 
     button_sizer->Add(login_button_, 0, wxRIGHT, 10);
     button_sizer->Add(register_button_, 0, wxRIGHT, 10);
@@ -59,7 +60,7 @@ void LoginDialog::ConstructInterface() {
 
     //правая часть - список серверов
     wxBoxSizer* right_sizer = new wxBoxSizer(wxVERTICAL);
-    right_sizer->Add(new wxStaticText(panel, wxID_ANY, "Доступные сервера"), 0, wxTOP | wxLEFT | wxRIGHT, 10);
+    right_sizer->Add(new wxStaticText(panel, wxID_ANY, wxString::FromUTF8("Доступные сервера")), 0, wxTOP | wxLEFT | wxRIGHT, 10);
 
     //список серверов
     server_list_ = new wxListBox(panel, wxID_ANY, wxDefaultPosition, wxSize(250, 200));
@@ -68,10 +69,10 @@ void LoginDialog::ConstructInterface() {
     //Контекстное меню на списке серверов
     server_list_->Bind(wxEVT_CONTEXT_MENU, [this](wxContextMenuEvent& event) {
         wxMenu menu;
-        menu.Append(wxID_ADD, "Добавить сервер");
-        menu.Append(wxID_DELETE, "Удалить сервер");
+        menu.Append(wxID_ADD, wxString::FromUTF8("Добавить сервер"));
+        menu.Append(wxID_DELETE, wxString::FromUTF8("Удалить сервер"));
         menu.AppendSeparator();
-        menu.Append(wxID_REFRESH, "Обновить список");
+        menu.Append(wxID_REFRESH, wxString::FromUTF8("Обновить список"));
 
         menu.Bind(wxEVT_MENU, [this](wxCommandEvent& e) {
             switch (e.GetId()) {
@@ -87,9 +88,9 @@ void LoginDialog::ConstructInterface() {
     //кнопки управления списком серверов
     wxBoxSizer* server_button_sizer = new wxBoxSizer(wxHORIZONTAL);
 
-    add_button_ = new wxButton(panel, wxID_ANY, "Добавить");
-    delete_button_ = new wxButton(panel, wxID_ANY, "Удалить");
-    update_button_ = new wxButton(panel, wxID_ANY, "Обновить");
+    add_button_ = new wxButton(panel, wxID_ANY, wxString::FromUTF8("Добавить"));
+    delete_button_ = new wxButton(panel, wxID_ANY, wxString::FromUTF8("Удалить"));
+    update_button_ = new wxButton(panel, wxID_ANY, wxString::FromUTF8("Обновить"));
     update_button_->Disable(); //пока отключаем эту кнопку
 
     server_button_sizer->Add(add_button_, 1, wxRIGHT, 5);
@@ -97,14 +98,28 @@ void LoginDialog::ConstructInterface() {
     server_button_sizer->Add(update_button_, 1);
 
     // Добавляем подсказки
-    add_button_->SetToolTip("Добавить новый сервер вручную");
-    delete_button_->SetToolTip("Удалить выбранный сервер");
-    update_button_->SetToolTip("Обновить список серверов из сети");
+    add_button_->SetToolTip(wxString::FromUTF8("Добавить новый сервер вручную"));
+    delete_button_->SetToolTip(wxString::FromUTF8("Удалить выбранный сервер"));
+    update_button_->SetToolTip(wxString::FromUTF8("Обновить список серверов из сети"));
 
     right_sizer->Add(server_button_sizer, 0, wxEXPAND | wxLEFT | wxRIGHT | wxBOTTOM, 10);
     main_sizer->Add(right_sizer, 1, wxEXPAND | wxALL, 10);
 
     panel->SetSizer(main_sizer);
+
+    // Загрузка иконки приложения
+    wxIcon appIcon;
+#if defined(__WXMSW__)
+    appIcon = wxIcon("APP_ICON", wxBITMAP_TYPE_ICO_RESOURCE);
+#elif defined(__WXGTK__)
+    appIcon = wxIcon(wxString("resources/icon.png"), wxBITMAP_TYPE_PNG);
+#elif defined(__WXOSX__)
+    appIcon = wxIcon(wxString("resources/icon.icns"), wxBITMAP_TYPE_ICON);
+#endif
+
+    if (appIcon.IsOk()) {
+        SetIcon(appIcon);
+    }
 
     //биндинг событий
     login_button_->Bind(wxEVT_BUTTON, &LoginDialog::OnLogin, this);
@@ -124,7 +139,8 @@ void LoginDialog::ConstructInterface() {
 
 void LoginDialog::OnLogin(wxCommandEvent& event) {
     if (username_field_->IsEmpty() || password_field_->IsEmpty() || server_list_->GetSelection() == wxNOT_FOUND) {
-        wxMessageBox("Заполните все поля и выберите сервер", "Ошибка", wxICON_WARNING);
+        wxMessageBox(wxString::FromUTF8("Заполните все поля и выберите сервер"), 
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         return;
     }
 
@@ -152,7 +168,8 @@ void LoginDialog::OnCancel(wxCommandEvent& event) {
 void LoginDialog::OnRegister(wxCommandEvent& event) {
     // Проверяем выбран ли сервер
     if (server_list_->GetSelection() == wxNOT_FOUND) {
-        wxMessageBox("Сначала выберите сервер для регистрации", "Ошибка", wxICON_WARNING);
+        wxMessageBox(wxString::FromUTF8("Сначала выберите сервер для регистрации"), 
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         return;
     }
 
@@ -173,8 +190,8 @@ void LoginDialog::OnClose(wxCloseEvent& event) {
 
 void LoginDialog::OnAddServer(wxCommandEvent& event) {
     wxTextEntryDialog dlg(this,
-        "Введите адрес сервера в формате IP\nНапример: 192.168.1.11",
-        "Добавление сервера");
+        wxString::FromUTF8("Введите адрес сервера в формате IP\nНапример: 192.168.1.11"),
+        wxString::FromUTF8("Добавление сервера"));
 
     if (dlg.ShowModal() == wxID_OK) {
         wxString server = dlg.GetValue();
@@ -186,15 +203,16 @@ void LoginDialog::OnAddServer(wxCommandEvent& event) {
                 SaveConfig();
             }
             else {
-                wxMessageBox("Этот сервер уже существует в списке!", "Предупреждение", wxICON_WARNING);
+                wxMessageBox(wxString::FromUTF8("Этот сервер уже существует в списке!"), 
+                    wxString::FromUTF8("Предупреждение"), wxICON_WARNING);
                 return;
             }
         } else {
             wxMessageBox(
-                "Некорректный формат сервера!\n"
+                wxString::FromUTF8("Некорректный формат сервера!\n"
                 "Используйте формат: XXX.XXX.XXX.XXX\n"
-                "Где XXX - число от 0 до 255",
-                "Ошибка", wxICON_ERROR
+                "Где XXX - число от 0 до 255"),
+                wxString::FromUTF8("Ошибка"), wxICON_ERROR
             );
         }
     }
@@ -203,20 +221,22 @@ void LoginDialog::OnAddServer(wxCommandEvent& event) {
 void LoginDialog::OnDeleteServer(wxCommandEvent& event) {
     int selected = server_list_->GetSelection();
     if (selected == wxNOT_FOUND) {
-        wxMessageBox("Выберите сервер для удаления", "Ошибка", wxICON_WARNING);
+        wxMessageBox(wxString::FromUTF8("Выберите сервер для удаления"), 
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         return;
     }
 
     wxString server = server_list_->GetString(selected);
     wxMessageDialog confirm_dlg(this,
-        wxString::Format("Удалить сервер %s из списка?", server),
-        "Подтвердить удаление",
+        wxString::Format(wxString::FromUTF8("Удалить сервер %s из списка?"), server),
+        wxString::FromUTF8("Подтвердить удаление"),
         wxYES_NO | wxICON_QUESTION
     );
 
     // Проверка, что это не последний сервер
     if (server_list_->GetCount() <= 1) {
-        wxMessageBox("Нельзя удалить последний сервер из списка", "Ошибка", wxICON_WARNING);
+        wxMessageBox(wxString::FromUTF8("Нельзя удалить последний сервер из списка"), 
+            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         return;
     }
 
@@ -364,8 +384,8 @@ void LoginDialog::ConnetToSelectedServer() {
 
 void LoginDialog::OnUpdateServers(wxCommandEvent& event) {
     //TODO: реализовать обновление серверов
-    wxMessageBox("Функция обновления серверов будет реализована позже",
-        "Информация", wxICON_INFORMATION);
+    wxMessageBox(wxString::FromUTF8("Функция обновления серверов будет реализована позже"),
+        wxString::FromUTF8("Информация"), wxICON_INFORMATION);
 }
 
 bool LoginDialog::HandleNetworkMessage(const std::string& json_msg) {
@@ -408,10 +428,16 @@ bool LoginDialog::HandleNetworkMessage(const std::string& json_msg) {
                 EndModal(wxID_OK);
             }
             else if (answer == "err" && j.contains("reason") && j["reason"] == "user exists") {
-                wxMessageBox("Такой пользователь уже авторизирован в системе", "Ошибка", wxICON_ERROR);
+                wxMessageBox(wxString::FromUTF8("Такой пользователь уже авторизирован в системе"),
+                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
+            }
+            else if (answer == "err" && j.contains("reason") && j["reason"] == "wrong login or password") {
+                wxMessageBox(wxString::FromUTF8("Не верный логин или пароль"),
+                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
             }
             else {
-                wxMessageBox("Невозможно подключиться к серверу", "Ошибка", wxICON_ERROR);
+                wxMessageBox(wxString::FromUTF8("Невозможно подключиться к серверу"),
+                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
             }
         }
         else {

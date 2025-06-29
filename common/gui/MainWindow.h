@@ -4,6 +4,7 @@
 #include <wx/richtext/richtextctrl.h>
 #include <wx/font.h>
 #include <wx/encinfo.h>
+#include <wx/taskbar.h>
 #include <map>
 #include "LoginDialog.h"
 #include "ChatClient.h"
@@ -43,6 +44,9 @@ private:
     std::string current_username_;
     std::string hash_password_;
 
+    //tray
+    wxTaskBarIcon* tray_icon_ = nullptr;
+
     //списки пользователей
     wxListBox* users_listbox_;
     wxStaticText* room_users_label_;
@@ -63,6 +67,7 @@ private:
     wxButton* text_style_smiley_button_;
 
     void ConstructInterface();
+    void SetTitleMainWindow(const std::string& name);
     void OnSendMessage(wxCommandEvent& event);
     void OnCreateRoom(wxCommandEvent& event);
     void OnRoomList(wxCommandEvent& event);
@@ -81,6 +86,7 @@ private:
     void UpdateRoomUsers(const std::string& room_name, const std::set<std::string>& users);
     void UpdateInterfaceAfterChangedName(const std::string& old_name, const std::string& new_name);
 
+    void InsertTextAtCaret(const wxString& text);
     void ApplyTextStyle(const wxTextAttr& attr);
     void OnTextChanged(wxCommandEvent& event);
 
@@ -95,7 +101,12 @@ private:
 
     wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl);
     int CountUsefulChars(const wxString& text) const;
-    bool IsPrivateRoom(const std::string& name) const;
+
+    //методы для взаимодействия с треем
+    void CreateTrayIcon();
+    void RemoveTrayIcon();
+    void RestoreFromTray();
+    void OnTrayIconDoubleClick(wxTaskBarIconEvent& event);
 };
 
 }//end namespace gui
