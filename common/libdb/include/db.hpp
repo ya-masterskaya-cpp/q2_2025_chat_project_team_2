@@ -2,6 +2,9 @@
 #include <string>
 #include <vector>
 #include <sqlite3.h>
+#include <optional>
+#include <unordered_map>
+#include <unordered_set>
 
 namespace db {
     struct User {
@@ -45,13 +48,17 @@ namespace db {
         bool DeleteUser(const std::string& user_login);
         bool IsUser(const std::string& user_login);
         bool IsAliveUser(const std::string& user_login);
+        bool ChangeUserName(const std::string& user_login, const std::string& new_name);
+        std::optional<User> GetUserData(const std::string& user_login);
         std::vector<User> GetAllUsers();
         std::vector<User> GetActiveUsers();
         std::vector<User> GetDeletedUsers();
         std::vector<std::string> GetUserRooms(const std::string& user_login);
+        std::unordered_map<std::string, std::unordered_set<std::string>> GetAllRoomWithRegisteredUsers();
 
         // --- Rooms ---
         bool CreateRoom(const std::string& room, int64_t unixtime);
+        bool ChangeRoomName(const std::string& current_room_name, const std::string& new_room_name);
         // при удалении комнаты в БД происходит автоматическое удаление из TABLE messages сообщений удаляемой комнаты:
         bool DeleteRoom(const std::string& room);
         bool IsRoom(const std::string& room);

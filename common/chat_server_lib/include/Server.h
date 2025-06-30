@@ -10,6 +10,8 @@
 #include <condition_variable>
 #include <unordered_map>
 #include <vector>
+#include <set>
+
 #include "nlohmann/json.hpp"    //добавил
 //#include "json.h"
 #include <unordered_set>
@@ -117,10 +119,10 @@ protected:
     void change_session(MsgQueue* session, const std::string& login);
     nlohmann::json add_user(MsgQueue* session, const std::string& login);
     nlohmann::json change_name(MsgQueue* session, const std::string& new_name);
-    nlohmann::json ask_rooms();
+    nlohmann::json ask_rooms(MsgQueue* session);
     nlohmann::json ask_users(const std::string& room);
     void remove_user(MsgQueue* session);
-    nlohmann::json create_room(const std::string& room_name);
+    nlohmann::json create_room(MsgQueue* session, const std::string& room_name);
     nlohmann::json enter_room(MsgQueue* session, const std::string& room_name);
     nlohmann::json leave_room(MsgQueue* session, const std::string& room_name);
 
@@ -138,4 +140,9 @@ protected:
     // для тестового сервера
     tcp::acceptor in_acceptor_{ ioc };  // Инициализируем сразу с io_context
     tcp::acceptor out_acceptor_{ ioc }; // Инициализируем сразу с io_context
+
+    // КЭШ: <имя_комнаты, {логин1, логин2, ...}>
+    std::unordered_map<std::string, std::unordered_set<std::string>> members_who_wrote_;
+    // Мьютекс для защиты members_who_wrote_ 
+    std::mutex members_mutex_;
 };

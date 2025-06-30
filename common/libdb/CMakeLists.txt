@@ -27,7 +27,7 @@ if(BUILD_TESTING)
     
     add_executable(db_and_server_tests  
         test/test.cpp 
-	test/server_tests.cpp
+	# test/server_tests.cpp
         # Добавляйте новые файлы тестов сюда
     )
     

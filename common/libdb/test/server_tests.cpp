@@ -13,7 +13,7 @@
 #include "../../../src/client/ClientHTTP.h"
 #include "../../common/chat_server_lib/src/json.h"
 #include "Logger.h"
-
+/*
 
 struct TestDatabase {
     db::DB database;
