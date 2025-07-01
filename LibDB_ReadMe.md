@@ -2,6 +2,8 @@
 
 Минималистичная библиотека-обёртка для работы с `SQLite3` на `C++17`. Кроссплатформенность: Windows и Linux
 `Conan` + `CMake`, автоматические тесты `Catch2`
+Предназначена для хранения данных IRC-чата: истории сообщений, пользователей, комнат и т.д. 
+Отдельно офомрлены функции работы со временем `time_utils.hpp`.
 
 ### Быстрая сборка (MS Visual Studio)
 
@@ -16,12 +18,17 @@ cmake --build build --config Debug
 <pre>
 libdb/
 ├── include/        
+|    ├── db.hpp
+|    └── time_utils.hpp
 ├── src/            
+|    ├── db.cpp
+|    └── stmt.hpp
 ├── CMakeLists.txt  
 ├── conanfile.txt 
-└── test/           </pre>
+└── test/           
+     └── test.cpp </pre>
 
-### Используемые структуры:
+### Используемые структуры (`namespace db`)
 ```cpp
 struct User {
     std::string login;
@@ -38,105 +45,84 @@ struct Message {
     std::string room;
 };
 ```
-При отсутствии файла БД, будет создан пустой файл БД. </br>
+При отсутствии файла БД, будет создан файл БД с исходной структурой БД. Имя файла по умолчанию: chat.db </br>
+Имеется возможность задать имя файла БД. </br>
+
 Униальные поля: логин пользователя, наименование комнаты и роль пользователя в БД. </br>
-### Перечень функций работы с БД
+### Перечень функций работы с БД (`namespace db`)
 
 #### 1. Управление подключением
-- `OpenDB()` – открывает соединение с БД, инициализирует схему (если БД новая).
 ``` cpp
-      bool OpenDB();
-```
-- `CloseDB()` – закрывает соединение.
-``` cpp
-      void CloseDB();
-```
-- `GetVersionDB()` - возвращает внутренний номер версии БД.
-``` cpp
-      td::string GetVersionDB();
-```
+    bool OpenDB(); // открывает соединение с БД, инициализирует схему (если БД новая)
 
+    void CloseDB(); // закрывает соединение
+
+    std::string GetVersionDB(); //возвращает внутренний номер версии БД
+```
 #### 2. Управление пользователями
-- `CreateUser(user)` – добавляет пользователя.
 ``` cpp
-      bool CreateUser(const User& user);
-```
-- `DeleteUser(login)` – удаляет пользователя, если он не состоит в комнатах (иначе только is_deleted = true).
-``` cpp
-      bool DeleteUser(const std::string& user_login);
-```
-- `IsUser(login)` – проверяет существование пользователя.
-``` cpp
-      bool IsUser(const std::string& user_login);
-```
-- `IsAliveUser(login)` – проверяет, что пользователь существует и не помечен на удаление.
-``` cpp
-      bool IsAliveUser(const std::string& user_login);
-```
-- `GetAllUsers()` – возвращает всех пользователей (включая удаленных).
-``` cpp
-      std::vector<User> GetAllUsers();
-```
-- `GetActiveUsers()` – возвращает только активных (is_deleted = false).
-``` cpp
-      std::vector<User> GetActiveUsers();
-```
-- `GetDeletedUsers()` – возвращает удаленных (is_deleted = true).
-``` cpp
-      std::vector<User> GetDeletedUsers();
+    bool CreateUser(const User& user); // добавляет пользователя
+
+    bool DeleteUser(const std::string& user_login); // удаляет пользователя, если он не состоит
+                                                      // в комнатах (иначе только is_deleted = true)
+
+    bool IsUser(const std::string& user_login); // проверяет существование пользователя
+
+    bool ChangeUserName(const std::string& user_login, const std::string& new_name); // меняет имя пользователя
+
+    bool IsAliveUser(const std::string& user_login); // проверяет, что пользователь существует и не помечен на удаление
+
+    std::optional<User> GetUserData(const std::string& user_login); // возвращает информацию по отдельному пользователю
+
+    std::vector<User> GetAllUsers(); // возвращает всех пользователей (включая удаленных)
+
+    std::vector<User> GetActiveUsers(); // возвращает только активных (is_deleted = false)
+
+    std::vector<User> GetDeletedUsers(); // возвращает удаленных (is_deleted = true)
 ```
 #### 3. Управление комнатами
-- `CreateRoom(room, unixtime)` – создает комнату.
 ``` cpp
-      bool CreateRoom(const std::string& room, int64_t unixtime);
-```
-- `DeleteRoom(room)` – удаляет комнату, сообщения комнаты из БД и связи пользователей с конатой.
-``` cpp
-      bool DeleteRoom(const std::string& room);
-```
-- `IsRoom(room)` – проверяет существование комнаты.
-``` cpp
-      bool IsRoom(const std::string& room);
-```
-- `GetRooms()` – возвращает список всех комнат.
-``` cpp
-      std::vector<std::string> GetRooms();
-```
+    bool CreateRoom(const std::string& room, int64_t unixtime); // создает комнату
 
+    bool DeleteRoom(const std::string& room); // удаляет комнату, сообщения комнаты из БД и связи пользователей с конатой
+
+    bool ChangeRoomName(const std::string& current_room_name, const std::string& new_room_name); // переименование комнаты
+
+    bool IsRoom(const std::string& room); // проверяет существование комнаты
+
+    std::vector<std::string> GetRooms(); // возвращает список всех комнат
+```
 #### 4. Связи пользователей и комнат
-- `AddUserToRoom(login, room)` – добавляет пользователя в комнату.
 ``` cpp
-      bool AddUserToRoom(const std::string& user_login, const std::string& room);
+    bool AddUserToRoom(const std::string& user_login, const std::string& room); // добавляет пользователя в комнату
+
+    bool DeleteUserFromRoom(const std::string& user_login, const std::string& room); // удаляет пользователя из комнаты
+
+    std::vector<std::string> GetUserRooms(const std::string& user_login); // возвращает комнаты пользователя
+
+    std::vector<User> GetRoomActiveUsers(const std::string& room); // возвращает активных пользователей комнаты
+
+    // возвращает все комнаты со списком зарегистрированных пользовтелей для каждой комнаты
+    std::unordered_map<std::string, std::unordered_set<std::string>> GetAllRoomWithRegisteredUsers();
 ```
-- `DeleteUserFromRoom(login, room)` – удаляет пользователя из комнаты.
+#### 5. Управление сообщениями
 ``` cpp
-      bool DeleteUserFromRoom(const std::string& user_login, const std::string& room);
-```
-- `GetUserRooms(login)` – возвращает комнаты пользователя.
-``` cpp
-      std::vector<std::string> GetUserRooms(const std::string& user_login);
-```
-- `GetRoomActiveUsers(room)` – возвращает активных пользователей комнаты.
-``` cpp
-      std::vector<User> GetRoomActiveUsers(const std::string& room);
+    bool InsertMessageToDB(const Message& message); // добавляет сообщение в комнату
+
+    std::vector<Message> GetRecentMessagesRoom(const std::string& room); // возвращает 50 последних сообщений
+
+    std::vector<Message> GetMessagesRoomAfter(const std::string& room, int64_t unixtime); // возвращает 50 сообщений,
+                                                                                // начиная с указанного времени (пагинация)
+
+    int GetCountRoomMessages(const std::string& room); // возвращает количество сообщений в комнате
 ```
 
-#### 5. Управление сообщениями
-- `InsertMessageToDB(message)` – добавляет сообщение в комнату.
-``` cpp
-      bool InsertMessageToDB(const Message& message);
-```
-- `GetRecentMessagesRoom(room)` – возвращает 50 последних сообщений.
-``` cpp
-      std::vector<Message> GetRecentMessagesRoom(const std::string& room);
-```
-- `GetMessagesRoomAfter(room, unixtime)` – возвращает 50 сообщений, начиная с указанного времени (пагинация).
-``` cpp
-      std::vector<Message> GetMessagesRoomAfter(const std::string& room, int64_t unixtime);
-```
-- `GetCountRoomMessages(room)` – возвращает количество сообщений в комнате.
-``` cpp
-      int GetCountRoomMessages(const std::string& room);
+### Функции работы со временем (`namespace utime`)
+```cpp
+    inline int64_t GetUnixTimeNs();  // получение unix времени с точностью до наносекунды
+
+    // потокозащищенная функция преобразования наносекунд в дату ("2023-11-15") и время ("14:30:45")
+    inline std::pair<std::string, std::string> UnixTimeToDateTime(int64_t unix_time_ns);
 ```
 
 ### Структура таблиц БД
