@@ -845,7 +845,7 @@ void MainWindow::UpdateRoomList(const std::set<std::string>& rooms) {
 
     std::set<std::string> realrooms;
     for (const auto& rr : rooms) {
-        if (rr.size() > 1 && rr[0] != '@' && rr[1] != '@') {
+        if (rr.size() > 0 && rr[0] != '@') {
             realrooms.insert(rr);
         }
     }
