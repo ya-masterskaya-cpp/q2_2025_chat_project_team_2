@@ -889,7 +889,6 @@ void MainWindow::CreateTrayIcon() {
 
     tray_icon_ = new wxTaskBarIcon();
 
-    // Устанавливаем иконку
     wxIcon icon;
 #if defined(__WXMSW__)
     icon = wxIcon("APP_ICON", wxBITMAP_TYPE_ICO_RESOURCE);
