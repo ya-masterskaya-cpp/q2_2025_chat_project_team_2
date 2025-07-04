@@ -432,7 +432,7 @@ bool LoginDialog::HandleNetworkMessage(const std::string& json_msg) {
                     wxString::FromUTF8("Ошибка"), wxICON_ERROR);
             }
             else if (answer == "err" && j.contains("reason") && j["reason"] == "wrong login or password") {
-                wxMessageBox(wxString::FromUTF8("Не верный логин или пароль"),
+                wxMessageBox(wxString::FromUTF8("Неверный логин или пароль"),
                     wxString::FromUTF8("Ошибка"), wxICON_ERROR);
             }
             else {
