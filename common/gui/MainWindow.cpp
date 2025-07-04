@@ -120,7 +120,6 @@ void MainWindow::ConstructInterface() {
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
     //устанавливаем шрифт по умолчанию
-    //this->SetFont(default_font_);
     this->SetFont(FontManager::GetEmojiFont());
     SetFont(FontManager::GetEmojiFont());
 
@@ -761,12 +760,16 @@ void MainWindow::OnTextChanged(wxCommandEvent& event) {
     message_length_label_->SetLabel(label);
 
     if (useful_count > MAX_MESSAGE_LENGTH) {
-        message_length_label_->SetForegroundColour(*wxRED);
+        message_length_label_->SetForegroundColour(*wxRED);;
     }
     else {
         message_length_label_->SetForegroundColour(
             wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
     }
+
+    //принудительное обновление виджета
+    message_length_label_->Refresh();
+    message_length_label_->Update();
 
     event.Skip();
 }
