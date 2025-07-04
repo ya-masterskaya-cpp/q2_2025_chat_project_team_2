@@ -46,66 +46,100 @@ std::vector<Smiley> GetSmileys() {
     };
 }
 
-//currect
-wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl) {
+wxString bbcode::ConvertRichTextToBBCode(wxRichTextCtrl* ctrl) {
     wxString result;
-    wxRichTextBuffer* buffer = &ctrl->GetBuffer();
+    wxString full_text = ctrl->GetValue();
 
-    if (!buffer || ctrl->IsEmpty()) return result;
+    // Если текст пустой, возвращаем пустую строку
+    if (full_text.IsEmpty())
+        return result;
 
-    // Итератор по всем элементам буфера
-    wxRichTextObjectList::compatibility_iterator node = buffer->GetChildren().GetFirst();
-    while (node) {
-        if (wxRichTextParagraph* para = wxDynamicCast(node->GetData(), wxRichTextParagraph)) {
-            // Обрабатываем все дочерние элементы параграфа
-            wxRichTextObjectList::compatibility_iterator child_node = para->GetChildren().GetFirst();
-            while (child_node) {
-                wxRichTextObject* obj = child_node->GetData();
-                const wxRichTextRange& range = obj->GetRange();
-
-                // Получаем текст для диапазона
-                wxString text_fragment = ctrl->GetRange(range.GetStart(), range.GetEnd());
-
-                // Пропускаем пустые фрагменты (например, пустые строки)
-                if (!text_fragment.IsEmpty()) {
-                    const wxRichTextAttr& attr = obj->GetAttributes();
-
-                    // Открываем теги стилей
-                    if (attr.GetFontWeight() == wxFONTWEIGHT_BOLD) result += "[b]";
-                    if (attr.GetFontStyle() == wxFONTSTYLE_ITALIC) result += "[i]";
-                    if (attr.GetFontUnderlined()) result += "[u]";
-
-                    // Экранирование специальных символов
-                    text_fragment.Replace("[", "\\[");
-                    text_fragment.Replace("]", "\\]");
-                    text_fragment.Replace("\\", "\\\\");
-
-                    result += text_fragment;
-
-                    // Закрываем теги
-                    if (attr.GetFontUnderlined()) result += "[/u]";
-                    if (attr.GetFontStyle() == wxFONTSTYLE_ITALIC) result += "[/i]";
-                    if (attr.GetFontWeight() == wxFONTWEIGHT_BOLD) result += "[/b]";
-                }
-                child_node = child_node->GetNext();
-            }
-
-            // Добавляем перенос строки между параграфами
-            if (node->GetNext()) {
-                result += "\n";
-            }
-        }
-        node = node->GetNext();
+    while (!full_text.IsEmpty() && (full_text.Last() == '\n' || full_text.Last() == '\r')) {
+        full_text.RemoveLast();
     }
 
-    // Убедимся, что обработан весь текст
-    const wxString full_text = ctrl->GetValue();
-    if (result.length() < full_text.length()) {
-        wxString remaining = full_text.Mid(result.length());
-        remaining.Replace("[", "\\[");
-        remaining.Replace("]", "\\]");
-        remaining.Replace("\\", "\\\\");
-        result += remaining;
+    // Создаем временный буфер для накопления форматированных фрагментов
+    wxString current_fragment;
+    wxRichTextAttr current_style;
+    bool has_current_style = false;
+
+    // Перебираем все символы в тексте
+    for (long pos = 0; pos < full_text.length(); pos++) {
+        wxRichTextAttr style;
+        bool hasStyle = ctrl->GetStyle(pos, style);
+
+        // Если стиль изменился или это первый символ
+        if (!has_current_style || !hasStyle || !style.EqPartial(current_style)) {
+            // Добавляем предыдущий фрагмент с форматированием
+            if (!current_fragment.IsEmpty()) {
+                // Добавляем открывающие теги
+                if (current_style.GetFontWeight() == wxFONTWEIGHT_BOLD)
+                    result += "[b]";
+                if (current_style.GetFontStyle() == wxFONTSTYLE_ITALIC)
+                    result += "[i]";
+                if (current_style.GetFontUnderlined())
+                    result += "[u]";
+
+                // Экранируем и добавляем текст фрагмента
+                wxString escaped = current_fragment;
+                escaped.Replace("[", "\\[");
+                escaped.Replace("]", "\\]");
+                escaped.Replace("\\", "\\\\");
+                result += escaped;
+
+                // Добавляем закрывающие теги
+                if (current_style.GetFontUnderlined())
+                    result += "[/u]";
+                if (current_style.GetFontStyle() == wxFONTSTYLE_ITALIC)
+                    result += "[/i]";
+                if (current_style.GetFontWeight() == wxFONTWEIGHT_BOLD)
+                    result += "[/b]";
+
+                current_fragment.clear();
+            }
+
+            // Обновляем текущий стиль
+            if (hasStyle) {
+                current_style = style;
+                has_current_style = true;
+            }
+            else {
+                has_current_style = false;
+            }
+        }
+
+        // Добавляем текущий символ в накапливаемый фрагмент
+        current_fragment += full_text[pos];
+    }
+
+    // Добавляем последний фрагмент
+    if (!current_fragment.IsEmpty()) {
+        // Добавляем открывающие теги
+        if (has_current_style) {
+            if (current_style.GetFontWeight() == wxFONTWEIGHT_BOLD)
+                result += "[b]";
+            if (current_style.GetFontStyle() == wxFONTSTYLE_ITALIC)
+                result += "[i]";
+            if (current_style.GetFontUnderlined())
+                result += "[u]";
+        }
+
+        // Экранируем и добавляем текст фрагмента
+        wxString escaped = current_fragment;
+        escaped.Replace("[", "\\[");
+        escaped.Replace("]", "\\]");
+        escaped.Replace("\\", "\\\\");
+        result += escaped;
+
+        // Добавляем закрывающие теги
+        if (has_current_style) {
+            if (current_style.GetFontUnderlined())
+                result += "[/u]";
+            if (current_style.GetFontStyle() == wxFONTSTYLE_ITALIC)
+                result += "[/i]";
+            if (current_style.GetFontWeight() == wxFONTWEIGHT_BOLD)
+                result += "[/b]";
+        }
     }
 
     return result;

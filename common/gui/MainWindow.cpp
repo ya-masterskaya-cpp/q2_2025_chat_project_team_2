@@ -32,6 +32,8 @@ ChatRoomPanel::ChatRoomPanel(wxWindow* parent, const std::string& room_name) :
 }
 
 void ChatRoomPanel::AddMessage(const IncomingMessage& msg) {
+    if (msg.text.empty()) return;
+
     // Замораживаем обновление для производительности
     display_field_->Freeze();
 
@@ -363,7 +365,6 @@ void MainWindow::SetTitleMainWindow(const std::string& name) {
 void MainWindow::OnSendMessage(wxCommandEvent& event) {
     wxString text = input_field_->GetValue();
 
-
     // Для отладки: вывод в консоль с поддержкой Unicode
 #ifdef _WIN32
     // Переключаем консоль в режим UTF-8
@@ -383,13 +384,19 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
 
     if (!text.IsEmpty()) {
 
+        if (!IsNonOnlySpace(text)) {
+            wxMessageBox(wxString::FromUTF8("Сообщение не содержит значимых символов"),
+                wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+            return;
+        }
+
         //проверяем длину сообщения
         int  useful_count = CountUsefulChars(text);
         if (useful_count > MAX_MESSAGE_LENGTH) {
             wxMessageBox(
                 wxString::Format(
                     wxString::FromUTF8("Сообщение слишком длинное! Максимум %d символов.\n\nСимволов: %d"),
-                    MAX_MESSAGE_LENGTH, useful_count), "Ошибка", wxICON_WARNING);
+                    MAX_MESSAGE_LENGTH, useful_count), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
             return;
         }
 
@@ -923,7 +930,10 @@ void MainWindow::CreateTrayIcon() {
 #else
         icon = wxArtProvider::GetIcon(wxART_INFORMATION);
 #endif
-        tray_icon_->SetIcon(wxICON(wxicon), wxString::FromUTF8("Чат клиента"));
+        tray_icon_->SetIcon(
+            wxArtProvider::GetIcon(wxART_INFORMATION),
+            wxString::FromUTF8("Чат клиента")
+        );
     }
 
     // Обработчики событий
@@ -960,6 +970,15 @@ void MainWindow::RestoreFromTray(){
 void MainWindow::OnTrayIconDoubleClick(wxTaskBarIconEvent& event){
     std::cout << "DOUBLE CLICK\n";
     RestoreFromTray();
+}
+
+bool MainWindow::IsNonOnlySpace(const wxString& text) {
+    for (const wxUniChar& c : text) {
+        if (!wxIsspace(c)) {
+            return true;
+        }
+    }
+    return false;
 }
 
 }// end namespace gui

@@ -107,6 +107,9 @@ private:
     void RemoveTrayIcon();
     void RestoreFromTray();
     void OnTrayIconDoubleClick(wxTaskBarIconEvent& event);
+
+    //
+    bool IsNonOnlySpace(const wxString& text);
 };
 
 }//end namespace gui
