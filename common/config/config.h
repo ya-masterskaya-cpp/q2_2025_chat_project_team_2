@@ -1,9 +1,11 @@
 #pragma once
-#include "string"
+#include <string>
+#include <set>
 #include <wx/settings.h>
 #include <wx/font.h>
 #include <wx/fontenum.h>
 #include <vector>
+
 
 const std::string MAIN_ROOM_NAME = "general";
 const std::string SYSTEM_SENDER_NAME = "System";
@@ -15,6 +17,25 @@ const int MAX_MESSAGE_LENGTH = 512;
 const std::string DEF_SERVER = "127.0.0.1";
 const std::string CLIENT_FIRST_PORT = "9003";
 const std::string CLIENT_SECOND_PORT = "9002";
+
+static const std::set<wxUniChar> AllowedChars = [] {
+    std::set<wxUniChar> chars;
+
+    // Цифры
+    for (wxChar c = '0'; c <= '9'; ++c) chars.insert(c);
+
+    // Английские буквы верхнего регистра
+    for (wxChar c = 'A'; c <= 'Z'; ++c) chars.insert(c);
+
+    // Английские буквы нижнего регистра
+    for (wxChar c = 'a'; c <= 'z'; ++c) chars.insert(c);
+
+    // Специальные символы
+    const wxString specials = "!#%?*()_-+=<>";
+    for (wxUniChar c : specials) chars.insert(c);
+
+    return chars;
+    }();
 
 class FontManager {
 public:
