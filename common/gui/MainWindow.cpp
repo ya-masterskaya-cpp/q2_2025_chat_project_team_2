@@ -546,11 +546,11 @@ void MainWindow::CreateRoom(bool success, const std::string& room_name) {
             client_->JoinRoom(room_name);
         }
         else {
-            wxMessageBox(to_utf8("Комната с таким именем уже существует"), to_utf8("Ошибка"), wxICON_WARNING);
+            wxMessageBox(wxString::FromUTF8("Комната с таким именем уже существует"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
         }
     }
     else {
-        wxMessageBox(to_utf8("Ошибка при создании комнаты"), to_utf8("Ошибка"), wxICON_WARNING);
+        wxMessageBox(wxString::FromUTF8("Ошибка при создании комнаты"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
     }
 }
 
