@@ -145,134 +145,68 @@ wxString bbcode::ConvertRichTextToBBCode(wxRichTextCtrl* ctrl) {
     return result;
 }
 
-void ParseBBCode(const wxString& text, wxRichTextCtrl* display_field) {
-    // Подготовка карты смайлов: [тег] -> эмодзи
-    auto smileys = GetSmileys();
-    std::unordered_map<wxString, wxString> smiley_tag_map;
-    for (const auto& s : smileys) {
-        smiley_tag_map[s.bbcode_tag.Lower()] = s.emoji;
-    }
+void bbcode::ParseBBCode(const wxString& text, wxRichTextCtrl* ctrl) {
+    // Очистка стиля
+    wxRichTextAttr attr;
+    ctrl->SetDefaultStyle(attr);
 
-    // Состояние стилей
-    bool in_bold = false;
-    bool in_italic = false;
-    bool in_underline = false;
+    // Простой парсер с поддержкой вложенности
+    size_t pos = 0;
+    std::vector<wxString> tagStack;
 
-    size_t i = 0;
-    const size_t len = text.length();
-    wxString text_buffer;
+    while (pos < text.length()) {
+        if (text[pos] == '[' && pos + 1 < text.length()) {
+            // Обработка тегов
+            size_t endTag = text.find(']', pos);
+            if (endTag != wxString::npos) {
+                wxString tag = text.SubString(pos + 1, endTag - 1);
+                pos = endTag + 1;
 
-    // Функция для записи буфера с текущими стилями
-    auto write_buffer = [&]() {
-        if (!text_buffer.IsEmpty()) {
-            if (in_bold) display_field->BeginBold();
-            if (in_italic) display_field->BeginItalic();
-            if (in_underline) display_field->BeginUnderline();
+                if (tag.StartsWith("/")) {
+                    // Закрывающий тег
+                    if (!tagStack.empty()) {
+                        tagStack.pop_back();
+                    }
 
-            display_field->WriteText(text_buffer);
-
-            if (in_underline) display_field->EndUnderline();
-            if (in_italic) display_field->EndItalic();
-            if (in_bold) display_field->EndBold();
-
-            text_buffer.clear();
-        }
-        };
-
-    while (i < len) {
-        // Обработка экранированных символов
-        if (text[i] == '\\' && i + 1 < len) {
-            wxChar next_char = text[i + 1];
-            if (next_char == '[' || next_char == ']' || next_char == '\\') {
-                text_buffer += next_char;
-                i += 2;
+                    // Обновляем стиль на основе оставшихся тегов
+                    attr = wxRichTextAttr();
+                    for (const wxString& openTag : tagStack) {
+                        ApplyTag(openTag, attr);
+                    }
+                    ctrl->SetDefaultStyle(attr);
+                }
+                else {
+                    // Открывающий тег
+                    tagStack.push_back(tag);
+                    ApplyTag(tag, attr);
+                    ctrl->SetDefaultStyle(attr);
+                }
                 continue;
             }
         }
 
-        // Обработка тегов
-        if (text[i] == '[' && i + 1 < len) {
-            bool tag_processed = false;
-
-            // Закрывающие теги [/]
-            if (i + 3 < len && text[i + 1] == '/') {
-                wxString tag = text.SubString(i + 2, i + 3).Lower();
-                if (tag == "b]" && in_bold) {
-                    write_buffer();
-                    in_bold = false;
-                    i += 4;
-                    tag_processed = true;
-                }
-                else if (tag == "i]" && in_italic) {
-                    write_buffer();
-                    in_italic = false;
-                    i += 4;
-                    tag_processed = true;
-                }
-                else if (tag == "u]" && in_underline) {
-                    write_buffer();
-                    in_underline = false;
-                    i += 4;
-                    tag_processed = true;
-                }
-            }
-            // Открывающие теги
-            else if (i + 2 < len) {
-                wxString tag = text.SubString(i + 1, i + 2).Lower();
-                if (tag == "b]") {
-                    write_buffer();
-                    in_bold = true;
-                    i += 3;
-                    tag_processed = true;
-                }
-                else if (tag == "i]") {
-                    write_buffer();
-                    in_italic = true;
-                    i += 3;
-                    tag_processed = true;
-                }
-                else if (tag == "u]") {
-                    write_buffer();
-                    in_underline = true;
-                    i += 3;
-                    tag_processed = true;
-                }
-            }
-
-            // Обработка смайлов если не обработан стилевой тег
-            if (!tag_processed) {
-                // Ищем закрывающую скобку
-                size_t end_pos = i + 1;
-                while (end_pos < len && end_pos < i + 20) {
-                    if (text[end_pos] == ']') break;
-                    end_pos++;
-                }
-
-                if (end_pos < len && text[end_pos] == ']') {
-                    wxString full_tag = text.SubString(i, end_pos);
-                    wxString tag_lower = full_tag.Lower();
-
-                    // Проверяем есть ли такой тег в смайлах
-                    auto it = smiley_tag_map.find(tag_lower);
-                    if (it != smiley_tag_map.end()) {
-                        write_buffer();
-                        display_field->WriteText(it->second);
-                        i = end_pos + 1;
-                        continue;
-                    }
-                }
-            }
+        // Обработка экранирования
+        if (text[pos] == '\\' && pos + 1 < text.length()) {
+            ctrl->WriteText(wxString(text[pos + 1]));
+            pos += 2;
         }
-
-        // Обычный текст
-        if (i < len) {
-            text_buffer += text[i];
-            i++;
+        else {
+            ctrl->WriteText(wxString(text[pos]));
+            pos++;
         }
     }
+}
 
-    // Запись оставшегося текста
-    write_buffer();
+void bbcode::ApplyTag(const wxString& tag, wxRichTextAttr& attr) {
+    if (tag == "b") {
+        attr.SetFontWeight(wxFONTWEIGHT_BOLD);
+    }
+    else if (tag == "i") {
+        attr.SetFontStyle(wxFONTSTYLE_ITALIC);
+    }
+    else if (tag == "u") {
+        attr.SetFontUnderlined(true);
+    }
 }
 
 } //end namespace bbcode

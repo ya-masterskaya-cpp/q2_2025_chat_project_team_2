@@ -99,11 +99,20 @@ MainWindow::MainWindow(std::unique_ptr<client::ChatClient> client,
     default_font_(DEFAULT_SERVER),
     current_username_(username),
     hash_password_(hash_password),
-    tray_icon_(nullptr)
+    tray_icon_(nullptr),
+    current_default_style_(),
+    bold_handler(std::make_unique<BoldHandler>()),
+    italic_handler(std::make_unique<ItalicHandler>()),
+    underline_handler(std::make_unique<UnderlineHandler>())
     {
     // Устанавливаем шрифт с поддержкой UTF-8
     wxFont emoji_font = FontManager::GetEmojiFont();
     this->SetFont(emoji_font);
+
+    current_default_style_.SetFont(FontManager::GetEmojiFont());
+    current_default_style_.SetFontWeight(wxFONTWEIGHT_NORMAL);
+    current_default_style_.SetFontStyle(wxFONTSTYLE_NORMAL);
+    current_default_style_.SetFontUnderlined(false);
 
     ConstructInterface();
 
@@ -122,6 +131,7 @@ void MainWindow::ConstructInterface() {
     //устанавливаем шрифт по умолчанию
     this->SetFont(FontManager::GetEmojiFont());
     SetFont(FontManager::GetEmojiFont());
+    current_default_style_.SetFont(FontManager::GetEmojiFont());
 
     //Верхняя часть - вкладки комнат 
     room_notebook_ = new wxNotebook(main_panel, wxID_ANY);
@@ -180,6 +190,19 @@ void MainWindow::ConstructInterface() {
 
     style_sizer->AddStretchSpacer();//выравнивание по правому краю
 
+    //оформление кнопок
+    wxBitmap boldIcon = wxArtProvider::GetBitmap(wxART_MAKE_ART_ID_FROM_STR("BOLD"));
+    wxBitmap italicIcon = wxArtProvider::GetBitmap(wxART_MAKE_ART_ID_FROM_STR("ITALIC"));
+    wxBitmap underlineIcon = wxArtProvider::GetBitmap(wxART_MAKE_ART_ID_FROM_STR("UNDERLINE"));
+
+    text_style_bold_button_->SetBitmap(boldIcon);
+    text_style_italic_button_->SetBitmap(italicIcon);
+    text_style_underline_button_->SetBitmap(underlineIcon);
+
+    text_style_bold_button_->SetCanFocus(false);
+    text_style_italic_button_->SetCanFocus(false);
+    text_style_underline_button_->SetCanFocus(false);   
+
 
     //панель для счетчика с иконкой информации
     wxPanel* counter_panel = new wxPanel(style_panel);
@@ -231,11 +254,12 @@ void MainWindow::ConstructInterface() {
     input_field_->SetBackgroundColour(wxColour(255, 255, 230));
 
     //настройка базовых стилей
-    input_field_->SetFont(FontManager::GetEmojiFont());
-    wxRichTextAttr attr;
-    //attr.SetFont(DEFAULT_FONT);
-    attr.SetFont(FontManager::GetEmojiFont());//для красивых смайлов
-    input_field_->SetBasicStyle(attr);
+    input_field_->SetDefaultStyle(current_default_style_);
+    input_field_->SetBasicStyle(current_default_style_);
+
+    // Первоначальное обновление кнопок
+    UpdateButtonStates();
+
 
     //кнопка отправки
     send_message_button_ = new wxButton(input_panel, wxID_ANY, wxString::FromUTF8("Отправить"));
@@ -329,6 +353,7 @@ void MainWindow::ConstructInterface() {
         });
 
     //Биндинг событий
+    auto updateHandler = [this](wxEvent&) { UpdateButtonStates(); };
     Bind(wxEVT_CLOSE_WINDOW, &MainWindow::OnClose, this);
     room_notebook_->Bind(wxEVT_NOTEBOOK_PAGE_CHANGED, &MainWindow::OnTabChanged, this);
     send_message_button_->Bind(wxEVT_BUTTON, &MainWindow::OnSendMessage, this);
@@ -341,7 +366,16 @@ void MainWindow::ConstructInterface() {
     text_style_italic_button_->Bind(wxEVT_BUTTON, &MainWindow::OnTextFormatItalic, this);
     text_style_underline_button_->Bind(wxEVT_BUTTON, &MainWindow::OnTextFormatUnderline, this);
     text_style_smiley_button_->Bind(wxEVT_BUTTON, &MainWindow::OnSmiley, this);
-    input_field_->Bind(wxEVT_TEXT, &MainWindow::OnTextChanged, this);//для подсчета длинны сообщений
+    input_field_->Bind(wxEVT_TEXT, &MainWindow::OnTextChanged, this);
+    input_field_->Bind(wxEVT_SET_FOCUS, [this](wxFocusEvent& event) {
+        UpdateButtonStates();
+        event.Skip(); });
+    input_field_->Bind(wxEVT_KILL_FOCUS, [this](wxFocusEvent& event) {
+        UpdateButtonStates();
+        event.Skip(); });
+    input_field_->Bind(wxEVT_RICHTEXT_SELECTION_CHANGED, [this](wxRichTextEvent& event) {
+        UpdateButtonStates();
+        event.Skip(); });
     users_listbox_->Bind(wxEVT_CONTEXT_MENU, &MainWindow::OnUserListRightClick, this);
 
     Center();
@@ -426,6 +460,8 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
 
             client_->SendMessageToServer(msg);
             input_field_->Clear();
+            ResetTextStyles(true);
+            
 
             //reverse msg for private 
             if (!msg.room.empty() && msg.room.at(0) == '@') {
@@ -437,13 +473,7 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
                 AddMessage(reverse_msg);
             }
 
-            //После отправки сбрасываем стили
-            wxRichTextAttr reset_attr;
-            //reset_attr.SetFont(default_font_);
-            reset_attr.SetFont(FontManager::GetEmojiFont());
-
-            input_field_->SetBasicStyle(reset_attr);
-            input_field_->SetDefaultStyle(reset_attr);
+            
         }
     } 
     //Вернуть фокус в поле ввода
@@ -464,10 +494,6 @@ void MainWindow::OnCreateRoom(wxCommandEvent& event) {
 
 void MainWindow::OnRoomList(wxCommandEvent& event) {
     client_->RequestRoomList();
-}
-
-void MainWindow::OnUserList(wxCommandEvent& event) {
-    
 }
 
 void MainWindow::OnLeaveRoom(wxCommandEvent& event) {
@@ -669,24 +695,15 @@ if (event.CanVeto()) {
 }
 
 void MainWindow::OnTextFormatBold(wxCommandEvent& event) {
-    wxRichTextAttr attr;
-    attr.SetFont(FontManager::GetEmojiFont());
-    attr.SetFontWeight(wxFONTWEIGHT_BOLD);
-    ApplyTextStyle(attr);
+    ToggleStyle(*bold_handler);
 }
 
 void MainWindow::OnTextFormatItalic(wxCommandEvent& event) {
-    wxRichTextAttr attr;
-    attr.SetFont(FontManager::GetEmojiFont());
-    attr.SetFontStyle(wxFONTSTYLE_ITALIC);
-    ApplyTextStyle(attr);
+    ToggleStyle(*italic_handler);
 }
 
 void MainWindow::OnTextFormatUnderline(wxCommandEvent& event) {
-    wxRichTextAttr attr;
-    attr.SetFont(FontManager::GetEmojiFont());
-    attr.SetFontUnderlined(true);
-    ApplyTextStyle(attr);
+    ToggleStyle(*underline_handler);
 }
 
 void MainWindow::OnSmiley(wxCommandEvent& event) {
@@ -739,22 +756,13 @@ void MainWindow::InsertTextAtCaret(const wxString& text) {
     input_field_->SetSelection(new_pos, new_pos);
 }
 
-void MainWindow::ApplyTextStyle(const wxTextAttr& attr) {
-    if (input_field_->HasSelection()) {
-        long start, end;
-        input_field_->GetSelection(&start, & end);
-        input_field_->SetStyle(start, end, attr);
-    } else {
-        wxTextAttr current_attr = input_field_->GetDefaultStyle();
-        wxTextAttr new_attr = current_attr;
-        new_attr.Merge(attr);
-        input_field_->SetDefaultStyle(new_attr);
-    }
-}
-
 void MainWindow::OnTextChanged(wxCommandEvent& event) {
     wxString text = input_field_->GetValue();
     int useful_count = CountUsefulChars(text);
+
+    if (!input_field_->HasSelection()) {
+        UpdateButtonStates();
+    }
 
     wxString label = wxString::Format("%d / %d", useful_count, MAX_MESSAGE_LENGTH);
     message_length_label_->SetLabel(label);
@@ -766,6 +774,8 @@ void MainWindow::OnTextChanged(wxCommandEvent& event) {
         message_length_label_->SetForegroundColour(
             wxSystemSettings::GetColour(wxSYS_COLOUR_WINDOWTEXT));
     }
+
+    UpdateButtonStates();
 
     //принудительное обновление виджета
     message_length_label_->Refresh();
@@ -858,13 +868,12 @@ void MainWindow::EnterRoom(bool success, const std::string& room_name) {
         ChatRoomPanel* room_panel = new ChatRoomPanel(room_notebook_, room_name);
         wxString wx_room_name = wxString::FromUTF8(room_name.c_str());
         room_notebook_->AddPage(room_panel, wx_room_name, true);
-        //room_notebook_->AddPage(room_panel, room_name, true);
         rooms_[room_name] = room_panel;
     }
 }
 
 void MainWindow::LeaveRoom(bool success, const std::string& room_name) {
-    std::cout << " leave room \n";
+    std::cout << "[MAIN LeaveRoom]: \n";
     if (success && room_name != MAIN_ROOM_NAME) {
         std::cerr << "[MAIN LeaveRoom]: " << current_username_ << " вышел из комнаты \"" << room_name << "\"\n";
 
@@ -882,7 +891,7 @@ void MainWindow::LeaveRoom(bool success, const std::string& room_name) {
 }
 
 void MainWindow::ChangeName(bool success, const std::string& new_name) {
-    std::cout << " change name \n";
+    std::cout << "[MAIN ChangeName]: " << new_name << "  \n";
     if (success) {
         current_username_ = new_name;
         SetTitleMainWindow(current_username_);
@@ -983,5 +992,148 @@ bool MainWindow::IsNonOnlySpace(const wxString& text) {
     }
     return false;
 }
+
+void MainWindow::OnTextSelectionChanged(wxEvent& event) {
+    UpdateButtonStates();
+    event.Skip();
+}
+
+void MainWindow::ToggleStyle(StyleHandler& handler) {
+    
+    wxRichTextRange range = input_field_->GetSelectionRange();
+    const bool has_selection = range.GetLength() > 0;
+
+    if (has_selection) {
+        // Для выделенного текста
+        wxRichTextAttr new_attr;
+
+        // Проверяем состояние в начале выделения
+        wxRichTextAttr start_attr;
+        input_field_->GetStyle(range.GetStart(), start_attr);
+        const bool currentState = handler.IsActive(start_attr);
+
+        // Создаем новый атрибут
+        handler.Apply(new_attr, !currentState);
+
+        // Сохраняем неизменяемые свойства
+        new_attr.SetTextColour(start_attr.GetTextColour());
+        new_attr.SetBackgroundColour(start_attr.GetBackgroundColour());
+        new_attr.SetFontSize(start_attr.GetFontSize());
+        new_attr.SetFontFamily(start_attr.GetFontFamily());
+        new_attr.SetFontFaceName(start_attr.GetFontFaceName());
+
+        // Применяем стиль только к выделению
+        input_field_->SetStyle(range, new_attr);
+    }
+    else {
+        // Для ввода нового текста
+        bool currentState = handler.IsActive(current_default_style_);
+        handler.Apply(current_default_style_, !currentState);
+        input_field_->SetDefaultStyle(current_default_style_);
+    }
+
+    UpdateButtonStates();
+    input_field_->SetFocus();
+    input_field_->SetDefaultStyle(current_default_style_);
+}
+
+void MainWindow::UpdateButtonStates() {
+    wxRichTextRange range = input_field_->GetSelectionRange();
+    const bool has_selection = range.GetLength() > 0;
+
+    // Функция для проверки стиля в позиции
+    auto check_style_at_pos = [&](long pos, StyleHandler& handler) -> StyleHandler::State {
+        wxRichTextAttr attr;
+        if (input_field_->GetStyle(pos, attr)) {
+            //return handler.IsActive(attr) ? StyleHandler::ACTIVE : StyleHandler::INACTIVE;
+            return handler.GetState(attr);
+        }
+        return StyleHandler::INACTIVE;
+    };
+
+    if (has_selection) {
+        // Для выделенного текста
+        const long start = range.GetStart();
+        const long end = range.GetEnd();
+        
+        // Проверяем начало и конец выделения
+        StyleHandler::State start_state = check_style_at_pos(start, *bold_handler);
+        StyleHandler::State end_state = check_style_at_pos(end, *bold_handler);
+        
+        // Определяем состояние для кнопок
+        StyleHandler::State bold_state = (start_state == end_state) ? start_state : StyleHandler::MIXED;
+        start_state = check_style_at_pos(start, *italic_handler);
+        end_state = check_style_at_pos(end, *italic_handler);
+        StyleHandler::State italic_state = (start_state == end_state) ? start_state : StyleHandler::MIXED;
+        start_state = check_style_at_pos(start, *underline_handler);
+        end_state = check_style_at_pos(end, *underline_handler);
+        StyleHandler::State underline_state = (start_state == end_state) ? start_state : StyleHandler::MIXED;
+        
+        // Обновляем кнопки
+        UpdateButtonAppearance(text_style_bold_button_, bold_state, "Bold");
+        UpdateButtonAppearance(text_style_italic_button_, italic_state, "Italic");
+        UpdateButtonAppearance(text_style_underline_button_, underline_state, "Underline");
+    } else {
+        // Для стиля по умолчанию
+        const bool bold_active = bold_handler->IsActive(current_default_style_);
+        const bool italic_active = italic_handler->IsActive(current_default_style_);
+        const bool underline_active = underline_handler->IsActive(current_default_style_);
+        
+        // Обновляем кнопки
+        UpdateButtonAppearance(text_style_bold_button_, 
+            bold_active ? StyleHandler::ACTIVE : StyleHandler::INACTIVE, "Bold");
+        UpdateButtonAppearance(text_style_italic_button_, 
+            italic_active ? StyleHandler::ACTIVE : StyleHandler::INACTIVE, "Italic");
+        UpdateButtonAppearance(text_style_underline_button_, 
+            underline_active ? StyleHandler::ACTIVE : StyleHandler::INACTIVE, "Underline");
+    }
+    
+    // Принудительное обновление
+    text_style_bold_button_->Refresh();
+    text_style_italic_button_->Refresh();
+    text_style_underline_button_->Refresh();
+}
+
+void MainWindow::UpdateButtonAppearance(wxButton* button, StyleHandler::State state, const wxString& name) {
+    switch (state) {
+    case StyleHandler::ACTIVE:
+        button->SetBackgroundColour(wxColour(180, 220, 255));
+        button->SetToolTip(wxString::Format("Remove %s", name));
+        break;
+    case StyleHandler::INACTIVE:
+        button->SetBackgroundColour(*wxWHITE);
+        button->SetToolTip(wxString::Format("Apply %s", name));
+        break;
+    case StyleHandler::MIXED:
+        button->SetBackgroundColour(wxColour(220, 220, 220));
+        button->SetToolTip(wxString::Format("Mixed %s style", name));
+        break;
+    }
+}
+
+void MainWindow::ResetTextStyles(bool updateUI) {
+    current_default_style_.SetFontWeight(wxFONTWEIGHT_NORMAL);
+    current_default_style_.SetFontStyle(wxFONTSTYLE_NORMAL);
+    current_default_style_.SetFontUnderlined(false);
+
+    // Явная установка флагов стиля
+    long flags = current_default_style_.GetFlags();
+    flags |= wxTEXT_ATTR_FONT_WEIGHT | wxTEXT_ATTR_FONT_ITALIC | wxTEXT_ATTR_FONT_UNDERLINE;
+    current_default_style_.SetFlags(flags);
+
+    // Применение к полю ввода
+    input_field_->SetDefaultStyle(current_default_style_);
+    input_field_->SetBasicStyle(current_default_style_);
+
+    // Сброс форматирования существующего текста
+    wxRichTextAttr reset_attr = current_default_style_;
+    input_field_->SetStyle(0, input_field_->GetLastPosition(), reset_attr);
+
+    if (updateUI) {
+        UpdateButtonStates();
+    }
+    input_field_->SetDefaultStyle(current_default_style_);
+}
+
 
 }// end namespace gui
