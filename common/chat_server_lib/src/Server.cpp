@@ -70,6 +70,7 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
                 else if (!logged_users_.count(mes["user"])) {
                     ans = add_user(session, mes["user"]);
                     ans["name"] = session->name;
+                    in_msg.add(ask_users("general"));
                 }
                 else {
                     change_session(session, mes["user"]);
@@ -96,6 +97,7 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
                 break;
             case LEAVE_ROOM:
                 ans = leave_room(session, mes["room"]);
+                in_msg.add(ask_users(mes["room"]));
                 break;
             case LEAVE_CHAT:
                 remove_user(session);
@@ -333,8 +335,13 @@ nlohmann::json Server::ask_users(const std::string& room) {
 }
 
 void Server::remove_user(MsgQueue* session) {
+    std::string user_name = session->name;
     for (auto& u : users_) {
-        u.second.erase(session);
+        if (u.second.erase(session) > 0) {
+            if (u.first != user_name) {
+                in_msg.add(ask_users(u.first));
+            }
+        }
     }
     users_.erase(logged_users_[session->login]);
     logged_users_.erase(session->login);
