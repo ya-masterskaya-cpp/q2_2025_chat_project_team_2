@@ -38,6 +38,7 @@ private:
     void OnRegister(wxCommandEvent& event);
     void onCancel(wxCommandEvent& event);
 
+    bool CheckInput(const wxString& input);
 };
 
 } //end namespace gui

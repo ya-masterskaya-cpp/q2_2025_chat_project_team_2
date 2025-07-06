@@ -78,6 +78,22 @@ void RegisterDialog::OnRegister(wxCommandEvent& event) {
         return;
     }
 
+    if (!CheckInput(username_field_->GetValue())) {
+        wxMessageBox(wxString::FromUTF8("Имя пользователя содержит недопустимые символы.\n"
+            "Разрешены только: цифры, английские буквы, и символы: !#%?*()_-+=<>"),
+            wxString::FromUTF8("Ошибка ввода"),
+            wxICON_WARNING);
+        return;
+    }
+
+    if (!CheckInput(password_field_->GetValue())) {
+        wxMessageBox(wxString::FromUTF8("Пароль содержит недопустимые символы.\n"
+            "Разрешены только: цифры, английские буквы, и символы: !#%?*()_-+=<>"),
+            wxString::FromUTF8("Ошибка ввода"),
+            wxICON_WARNING);
+        return;
+    }
+
     if (password_field_->GetValue() != confirm_password_field_->GetValue()) {
         wxMessageBox(wxString::FromUTF8("Пароли не совпадают"),
             wxString::FromUTF8("Ошибка"), wxICON_ERROR);
@@ -155,6 +171,14 @@ void RegisterDialog::HandleNetworkMessage(const std::string& json_msg) {
     }
 }
 
+bool RegisterDialog::CheckInput(const wxString& input) {
+    for (auto c : input) {
+        if (!AllowedChars.count(c)) {
+            return false;
+        }
+    }
+    return true;
+}
 
 
 }//end namespace gui

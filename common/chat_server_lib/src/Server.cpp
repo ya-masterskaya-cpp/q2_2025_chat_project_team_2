@@ -105,6 +105,10 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
                 ans = check_login(mes["user"], mes["password"]) ?
                     make_ok_answer(CHECK_LOGIN, mes["user"]) :
                     make_err_answer(CHECK_LOGIN, mes["user"], WRONG_LOGPASS);
+                if (logged_users_.count(mes["user"]) && (*users_[logged_users_[mes["user"]]].begin())->is_online_)
+                {
+                    ans = make_err_answer(CHECK_LOGIN, mes["user"], USER_EXISTS);
+                }
                 break;
             case GENERAL:
                 mes["user"] = session->name;

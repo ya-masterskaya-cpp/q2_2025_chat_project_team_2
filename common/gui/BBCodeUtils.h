@@ -25,5 +25,7 @@ namespace bbcode {
     //обратное преобразование BBCode (стили и смайлы) в rich text control
     void ParseBBCode(const wxString& text, wxRichTextCtrl* display_field);
 
+    void ApplyTag(const wxString& tag, wxRichTextAttr& attr);
+
 } //end namespace bbcode
 } //end namespace gui
