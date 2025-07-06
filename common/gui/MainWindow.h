@@ -7,6 +7,7 @@
 #include <wx/taskbar.h>
 #include <wx/artprov.h>
 #include <map>
+#include <algorithm>
 #include "LoginDialog.h"
 #include "ChatClient.h"
 #include "BBCodeUtils.h"
@@ -200,6 +201,7 @@ private:
 
     wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl);
     int CountUsefulChars(const wxString& text) const;
+    void OnKeyDown(wxKeyEvent& event);
 
     //методы для взаимодействия с треем
     void CreateTrayIcon();
@@ -207,6 +209,11 @@ private:
     void RestoreFromTray();
     void OnTrayIconDoubleClick(wxTaskBarIconEvent& event);
 
+    //для удаления смайлика
+    bool IsPartOfEmoji(long pos) const;
+    long FindEmojiStart(long pos) const;
+    long FindEmojiEnd(long pos) const;
+    void DeleteEmojiAtPosition(long pos);
 };
 
 }//end namespace gui

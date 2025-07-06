@@ -376,6 +376,7 @@ void MainWindow::ConstructInterface() {
     input_field_->Bind(wxEVT_RICHTEXT_SELECTION_CHANGED, [this](wxRichTextEvent& event) {
         UpdateButtonStates();
         event.Skip(); });
+    input_field_->Bind(wxEVT_KEY_DOWN, &MainWindow::OnKeyDown, this);
     users_listbox_->Bind(wxEVT_CONTEXT_MENU, &MainWindow::OnUserListRightClick, this);
 
     Center();
@@ -807,6 +808,10 @@ int MainWindow::CountUsefulChars(const wxString& text) const {
     return count;
 }
 
+void MainWindow::OnKeyDown(wxKeyEvent& event) {
+    event.Skip();
+}
+
 void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
     int selection = users_listbox_->GetSelection();
     if (selection == wxNOT_FOUND) return;
@@ -1134,6 +1139,5 @@ void MainWindow::ResetTextStyles(bool updateUI) {
     }
     input_field_->SetDefaultStyle(current_default_style_);
 }
-
 
 }// end namespace gui

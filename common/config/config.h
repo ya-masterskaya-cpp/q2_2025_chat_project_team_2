@@ -91,13 +91,13 @@ static std::string to_utf8(const wxString& str) {
     return std::string(buffer.data(), buffer.length());
 }
 
-static std::string NormalizeRoomName(const std::string& name) {
-    // Преобразуем в wxString для корректной работы с UTF-8
-    wxString wx_name = wxString::FromUTF8(name);
-
-    // Удаляем начальные/конечные пробелы
-    wx_name.Trim(true).Trim(false);
-
-    // Возвращаем в UTF-8
-    return to_utf8(wx_name);
-}
+//static std::string NormalizeRoomName(const std::string& name) {
+//    // Преобразуем в wxString для корректной работы с UTF-8
+//    wxString wx_name = wxString::FromUTF8(name);
+//
+//    // Удаляем начальные/конечные пробелы
+//    wx_name.Trim(true).Trim(false);
+//
+//    // Возвращаем в UTF-8
+//    return to_utf8(wx_name);
+//}

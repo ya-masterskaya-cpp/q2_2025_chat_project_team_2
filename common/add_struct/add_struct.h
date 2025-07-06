@@ -28,18 +28,6 @@ struct IncomingMessage {
 struct OutgoingMessage {
     std::string room;
     std::string text;
-
-    std::string serialize() const {
-        return room + "|" + text;
-    }
-
-    static OutgoingMessage deserialize(const std::string& str) {
-        size_t pos = str.find('|');
-        if (pos == std::string::npos) {
-            return { "",str };
-        }
-        return { str.substr(0, pos), str.substr(pos + 1) };
-    }
 };
 
 //для контекстного меню 1-32767
