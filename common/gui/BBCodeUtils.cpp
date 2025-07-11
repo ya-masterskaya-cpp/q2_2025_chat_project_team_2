@@ -46,7 +46,7 @@ std::vector<Smiley> GetSmileys() {
     };
 }
 
-wxString bbcode::ConvertRichTextToBBCode(wxRichTextCtrl* ctrl) {
+wxString ConvertRichTextToBBCode(wxRichTextCtrl* ctrl) {
     wxString result;
     wxString full_text = ctrl->GetValue();
 
@@ -145,7 +145,7 @@ wxString bbcode::ConvertRichTextToBBCode(wxRichTextCtrl* ctrl) {
     return result;
 }
 
-void bbcode::ParseBBCode(const wxString& text, wxRichTextCtrl* ctrl) {
+void ParseBBCode(const wxString& text, wxRichTextCtrl* ctrl) {
     // Очистка стиля
     wxRichTextAttr attr;
     ctrl->SetDefaultStyle(attr);
@@ -197,7 +197,7 @@ void bbcode::ParseBBCode(const wxString& text, wxRichTextCtrl* ctrl) {
     }
 }
 
-void bbcode::ApplyTag(const wxString& tag, wxRichTextAttr& attr) {
+void ApplyTag(const wxString& tag, wxRichTextAttr& attr) {
     if (tag == "b") {
         attr.SetFontWeight(wxFONTWEIGHT_BOLD);
     }

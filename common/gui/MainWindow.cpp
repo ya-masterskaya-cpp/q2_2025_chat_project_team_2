@@ -22,7 +22,6 @@ ChatRoomPanel::ChatRoomPanel(wxWindow* parent, const std::string& room_name) :
     display_field_->SetMinSize(wxSize( 100, 300));
 
     //Установка шрифта по умолчанию
-    //SetFont(DEFAULT_FONT);
     SetFont(FontManager::GetEmojiFont());
     display_field_->SetBasicStyle(wxRichTextAttr());
     display_field_->BeginSuppressUndo();
@@ -94,20 +93,20 @@ void ChatRoomPanel::ParseBBCode(const wxString& text) {
 
 MainWindow::MainWindow(std::unique_ptr<client::ChatClient> client,
     const std::string username, const std::string& hash_password) :
-    wxFrame(nullptr, wxID_ANY, wxString::FromUTF8("Чат клиента"),wxDefaultPosition, wxSize(800,600)),
+    wxFrame(nullptr, wxID_ANY, wxString::FromUTF8("Чат клиента"), wxDefaultPosition, wxSize(800,600)),
     client_(std::move(client)),
     default_font_(DEFAULT_SERVER),
     current_username_(username),
     hash_password_(hash_password),
     tray_icon_(nullptr),
     current_default_style_(),
-    bold_handler(std::make_unique<BoldHandler>()),
-    italic_handler(std::make_unique<ItalicHandler>()),
-    underline_handler(std::make_unique<UnderlineHandler>())
+    bold_handler(std::make_unique<bbcode::BoldHandler>()),
+    italic_handler(std::make_unique<bbcode::ItalicHandler>()),
+    underline_handler(std::make_unique<bbcode::UnderlineHandler>())
     {
     // Устанавливаем шрифт с поддержкой UTF-8
     wxFont emoji_font = FontManager::GetEmojiFont();
-    this->SetFont(emoji_font);
+    SetFont(emoji_font);
 
     current_default_style_.SetFont(FontManager::GetEmojiFont());
     current_default_style_.SetFontWeight(wxFONTWEIGHT_NORMAL);
@@ -129,7 +128,6 @@ void MainWindow::ConstructInterface() {
     wxBoxSizer* main_sizer = new wxBoxSizer(wxVERTICAL);
 
     //устанавливаем шрифт по умолчанию
-    this->SetFont(FontManager::GetEmojiFont());
     SetFont(FontManager::GetEmojiFont());
     current_default_style_.SetFont(FontManager::GetEmojiFont());
 
@@ -399,28 +397,10 @@ void MainWindow::SetTitleMainWindow(const std::string& name) {
 void MainWindow::OnSendMessage(wxCommandEvent& event) {
     wxString text = input_field_->GetValue();
 
-    // Для отладки: вывод в консоль с поддержкой Unicode
-#ifdef _WIN32
-    // Переключаем консоль в режим UTF-8
-    static bool console_initialized = false;
-    if (!console_initialized) {
-        SetConsoleOutputCP(CP_UTF8);
-        console_initialized = true;
-    }
-
-    // Используем wcout для широких символов
-    std::wcout << L"INPUT TEXT: " << text.ToStdWstring() << L'\n';
-#else
-    // Для Linux/MacOS
-    std::cout << "INPUT TEXT: " << text.ToUTF8().data() << '\n';
-#endif
-
-
     if (!text.IsEmpty()) {
 
         if (!IsNonOnlySpace(text)) {
-            wxMessageBox(wxString::FromUTF8("Сообщение не содержит значимых символов"),
-                wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+            CreateErrorBox("Сообщение не содержит значимых символов");
             return;
         }
 
@@ -441,29 +421,14 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
             //преобразуем в bbcode
             wxString bbcode_text = ConvertRichTextToBBCode(input_field_);
 
-#ifdef _WIN32
-            std::wcout << L"BBCODE: " << bbcode_text.ToStdWstring() << L'\n';
-#else
-            std::cout << "BBCODE: " << bbcode_text.ToUTF8().data() << '\n';
-#endif
-
             OutgoingMessage msg;
             msg.room = room_name.ToUTF8().data();
             msg.text = bbcode_text.ToUTF8().data();
-
-
-#ifdef _WIN32
-            std::wcout << L"FORMATTED TEXT: " << wxString::FromUTF8(msg.text).ToStdWstring() << L'\n';
-#else
-            std::cout << "FORMATTED TEXT: " << msg.text << '\n';
-#endif
-
 
             client_->SendMessageToServer(msg);
             input_field_->Clear();
             ResetTextStyles(true);
             
-
             //reverse msg for private 
             if (!msg.room.empty() && msg.room.at(0) == '@') {
                 IncomingMessage reverse_msg;
@@ -473,8 +438,6 @@ void MainWindow::OnSendMessage(wxCommandEvent& event) {
                 reverse_msg.timestamp = std::chrono::system_clock::now();
                 AddMessage(reverse_msg);
             }
-
-            
         }
     } 
     //Вернуть фокус в поле ввода
@@ -500,16 +463,14 @@ void MainWindow::OnRoomList(wxCommandEvent& event) {
 void MainWindow::OnLeaveRoom(wxCommandEvent& event) {
     int selection = room_notebook_->GetSelection();
     if (selection == wxNOT_FOUND) {
-        wxMessageBox(wxString::FromUTF8("Выберите комнату для выхода"),
-            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+        CreateInfoBox("Выберите комнату для выхода");
         return;
     }
 
     wxString room_name = room_notebook_->GetPageText(selection);
 
     if (room_name == MAIN_ROOM_NAME) {
-        wxMessageBox(wxString::FromUTF8("Нельзя выйти из основной комнаты"),
-            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+        CreateInfoBox("Нельзя выйти из основной комнаты");
         return;
     }
     else {
@@ -532,11 +493,11 @@ void MainWindow::OnChangedUserName(wxCommandEvent& event) {
                 client_->ChangeUsername(to_utf8("@" + new_name));
             }
             else {
-                wxMessageBox(wxString::FromUTF8("Имя должно отличаться от предыдущего"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+                CreateInfoBox("Имя должно отличаться от предыдущего");
             }  
         }
         else {
-            wxMessageBox(wxString::FromUTF8("Имя не должно начинаться с @"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+            CreateInfoBox("Имя не должно начинаться с @");
         }
     }
 }
@@ -547,11 +508,11 @@ void MainWindow::CreateRoom(bool success, const std::string& room_name) {
             client_->JoinRoom(room_name);
         }
         else {
-            wxMessageBox(wxString::FromUTF8("Комната с таким именем уже существует"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+            CreateInfoBox("Комната с таким именем уже существует");
         }
     }
     else {
-        wxMessageBox(wxString::FromUTF8("Ошибка при создании комнаты"), wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+        CreateErrorBox("Ошибка при создании комнаты");
     }
 }
 
@@ -559,8 +520,6 @@ void MainWindow::AddMessage(const IncomingMessage& msg) {
     // Преобразование имен комнат и отправителей в UTF-8
     wxString room_name = wxString::FromUTF8(msg.room.c_str());
     wxString sender_name = wxString::FromUTF8(msg.sender.c_str());
-
-    std::cout << "ADDMESS: " << room_name << " : " << sender_name << '\n';
 
     //для приватных сообщений
     if (msg.room == current_username_) {
@@ -797,13 +756,8 @@ int MainWindow::CountUsefulChars(const wxString& text) const {
         // Игнорируем только управляющие символы и символы форматирования
         if (c == '\n' || c == '\r' || c == '\t') continue;
 
-        // Учитываем ВСЕ остальные символы (включая смайлы, пунктуацию и пробелы)
-        count++;
-
         // Защита от переполнения
-        if (count >= max_safe) {
-            return max_safe;
-        }
+        count == max_safe ? max_safe : ++count;
     }
     return count;
 }
@@ -820,8 +774,7 @@ void MainWindow::OnUserListRightClick(wxContextMenuEvent& event) {
 
     // Проверка, что это не текущий пользователь
     if (selected_user.EndsWith(wxString::FromUTF8("(Вы)"))) {
-        wxMessageBox(wxString::FromUTF8("Нельзя создать приватный чат с самим собой"), 
-            wxString::FromUTF8("Ошибка"), wxICON_WARNING);
+        CreateInfoBox("Нельзя создать приватный чат с самим собой");
         return;
     }
 
@@ -985,7 +938,6 @@ void MainWindow::RestoreFromTray(){
 
 //двойной клик
 void MainWindow::OnTrayIconDoubleClick(wxTaskBarIconEvent& event){
-    std::cout << "DOUBLE CLICK\n";
     RestoreFromTray();
 }
 
@@ -1003,7 +955,7 @@ void MainWindow::OnTextSelectionChanged(wxEvent& event) {
     event.Skip();
 }
 
-void MainWindow::ToggleStyle(StyleHandler& handler) {
+void MainWindow::ToggleStyle(bbcode::StyleHandler& handler) {
     
     wxRichTextRange range = input_field_->GetSelectionRange();
     const bool has_selection = range.GetLength() > 0;
@@ -1047,13 +999,12 @@ void MainWindow::UpdateButtonStates() {
     const bool has_selection = range.GetLength() > 0;
 
     // Функция для проверки стиля в позиции
-    auto check_style_at_pos = [&](long pos, StyleHandler& handler) -> StyleHandler::State {
+    auto check_style_at_pos = [&](long pos, bbcode::StyleHandler& handler) -> bbcode::StyleHandler::State {
         wxRichTextAttr attr;
         if (input_field_->GetStyle(pos, attr)) {
-            //return handler.IsActive(attr) ? StyleHandler::ACTIVE : StyleHandler::INACTIVE;
             return handler.GetState(attr);
         }
-        return StyleHandler::INACTIVE;
+        return bbcode::StyleHandler::INACTIVE;
     };
 
     if (has_selection) {
@@ -1062,17 +1013,17 @@ void MainWindow::UpdateButtonStates() {
         const long end = range.GetEnd();
         
         // Проверяем начало и конец выделения
-        StyleHandler::State start_state = check_style_at_pos(start, *bold_handler);
-        StyleHandler::State end_state = check_style_at_pos(end, *bold_handler);
+        bbcode::StyleHandler::State start_state = check_style_at_pos(start, *bold_handler);
+        bbcode::StyleHandler::State end_state = check_style_at_pos(end, *bold_handler);
         
         // Определяем состояние для кнопок
-        StyleHandler::State bold_state = (start_state == end_state) ? start_state : StyleHandler::MIXED;
+        bbcode::StyleHandler::State bold_state = (start_state == end_state) ? start_state : bbcode::StyleHandler::MIXED;
         start_state = check_style_at_pos(start, *italic_handler);
         end_state = check_style_at_pos(end, *italic_handler);
-        StyleHandler::State italic_state = (start_state == end_state) ? start_state : StyleHandler::MIXED;
+        bbcode::StyleHandler::State italic_state = (start_state == end_state) ? start_state : bbcode::StyleHandler::MIXED;
         start_state = check_style_at_pos(start, *underline_handler);
         end_state = check_style_at_pos(end, *underline_handler);
-        StyleHandler::State underline_state = (start_state == end_state) ? start_state : StyleHandler::MIXED;
+        bbcode::StyleHandler::State underline_state = (start_state == end_state) ? start_state : bbcode::StyleHandler::MIXED;
         
         // Обновляем кнопки
         UpdateButtonAppearance(text_style_bold_button_, bold_state, "Bold");
@@ -1086,11 +1037,11 @@ void MainWindow::UpdateButtonStates() {
         
         // Обновляем кнопки
         UpdateButtonAppearance(text_style_bold_button_, 
-            bold_active ? StyleHandler::ACTIVE : StyleHandler::INACTIVE, "Bold");
+            bold_active ? bbcode::StyleHandler::ACTIVE : bbcode::StyleHandler::INACTIVE, "Bold");
         UpdateButtonAppearance(text_style_italic_button_, 
-            italic_active ? StyleHandler::ACTIVE : StyleHandler::INACTIVE, "Italic");
+            italic_active ? bbcode::StyleHandler::ACTIVE : bbcode::StyleHandler::INACTIVE, "Italic");
         UpdateButtonAppearance(text_style_underline_button_, 
-            underline_active ? StyleHandler::ACTIVE : StyleHandler::INACTIVE, "Underline");
+            underline_active ? bbcode::StyleHandler::ACTIVE : bbcode::StyleHandler::INACTIVE, "Underline");
     }
     
     // Принудительное обновление
@@ -1099,17 +1050,17 @@ void MainWindow::UpdateButtonStates() {
     text_style_underline_button_->Refresh();
 }
 
-void MainWindow::UpdateButtonAppearance(wxButton* button, StyleHandler::State state, const wxString& name) {
+void MainWindow::UpdateButtonAppearance(wxButton* button, bbcode::StyleHandler::State state, const wxString& name) {
     switch (state) {
-    case StyleHandler::ACTIVE:
+    case bbcode::StyleHandler::ACTIVE:
         button->SetBackgroundColour(wxColour(180, 220, 255));
         button->SetToolTip(wxString::Format("Remove %s", name));
         break;
-    case StyleHandler::INACTIVE:
+    case bbcode::StyleHandler::INACTIVE:
         button->SetBackgroundColour(*wxWHITE);
         button->SetToolTip(wxString::Format("Apply %s", name));
         break;
-    case StyleHandler::MIXED:
+    case bbcode::StyleHandler::MIXED:
         button->SetBackgroundColour(wxColour(220, 220, 220));
         button->SetToolTip(wxString::Format("Mixed %s style", name));
         break;

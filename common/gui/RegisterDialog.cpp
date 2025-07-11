@@ -73,30 +73,22 @@ void RegisterDialog::ConstructInterface() {
 
 void RegisterDialog::OnRegister(wxCommandEvent& event) {
     if (username_field_->IsEmpty() || password_field_->IsEmpty() || confirm_password_field_->IsEmpty()) {
-        wxMessageBox(wxString::FromUTF8("Все поля должны быть заполнены"), 
-            wxString::FromUTF8("Ошибка"), wxICON_ERROR);
+        CreateErrorBox("Все поля должны быть заполнены");
         return;
     }
 
     if (!CheckInput(username_field_->GetValue())) {
-        wxMessageBox(wxString::FromUTF8("Имя пользователя содержит недопустимые символы.\n"
-            "Разрешены только: цифры, английские буквы, и символы: !#%?*()_-+=<>"),
-            wxString::FromUTF8("Ошибка ввода"),
-            wxICON_WARNING);
+        CreateWrongInputBox("Имя пользователя");
         return;
     }
 
     if (!CheckInput(password_field_->GetValue())) {
-        wxMessageBox(wxString::FromUTF8("Пароль содержит недопустимые символы.\n"
-            "Разрешены только: цифры, английские буквы, и символы: !#%?*()_-+=<>"),
-            wxString::FromUTF8("Ошибка ввода"),
-            wxICON_WARNING);
+        CreateWrongInputBox("Пароль");
         return;
     }
 
     if (password_field_->GetValue() != confirm_password_field_->GetValue()) {
-        wxMessageBox(wxString::FromUTF8("Пароли не совпадают"),
-            wxString::FromUTF8("Ошибка"), wxICON_ERROR);
+        CreateErrorBox("Пароли не совпадают");
         return;
     }
 
@@ -126,8 +118,6 @@ void RegisterDialog::HandleNetworkMessage(const std::string& json_msg) {
         }
 
         int type = j["type"];
-        IncomingMessage msg;
-        msg.timestamp = std::chrono::system_clock::now();
 
         // Обработка приветственного сообщения
         if (type == GENERAL) {
@@ -149,17 +139,14 @@ void RegisterDialog::HandleNetworkMessage(const std::string& json_msg) {
             std::string text_register_ = j["what"].get<std::string>();
 
             if (answer == "OK") {
-                wxMessageBox(wxString::FromUTF8("Регистрация прошла успешно!"),
-                    wxString::FromUTF8("Успех"), wxICON_INFORMATION);
+                CreateInfoBox("Регистрация прошла успешно!");
                 EndModal(wxID_OK);
             }
             else if(answer == "err" && j.contains("reason") && j["reason"] == "login exists") {
-                wxMessageBox(wxString::FromUTF8("Пользователь с таким именем уже существует"), 
-                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
+                CreateErrorBox("Пользователь с таким именем уже существует");
             }
             else {
-                wxMessageBox(wxString::FromUTF8("Невозможно подключиться к серверу"), 
-                    wxString::FromUTF8("Ошибка"), wxICON_ERROR);
+                CreateErrorBox("Невозможно подключиться к серверу");
             }
         }
         else {
