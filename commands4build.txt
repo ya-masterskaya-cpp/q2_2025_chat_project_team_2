@@ -1,0 +1,27 @@
+Для создания файлов на WIndows
+conan install ..
+
+Если ошибка при создании файлов, то нужно подгрузить файлы
+conan install --build=missing . -of ./build
+
+Потом собираем
+cmake . -B .\build -DCMAKE_BUILD_TYPE=Release
+
+
+
+Для linux систем установить
+1) Нужен gtk2 для работы GUI в линуске, поэтому ставим
+sudo apt install gtk2-engines-pixbuf libgtk2.0-dev
+
+2) gtk3 более актуален, возможно утсановить если будут нужны из него функции
+sudo apt install libgtk-3-dev
+
+3) Если есть проблемы со шрифтами, то пробуем установить
+sudo apt install gnome-themes-extra adwaita-icon-theme-full libgtk-3-0 libgtk-3-common
+sudo apt install --reinstall adwaita-icon-theme-full
+
+4) Устанавливаем библиотеки и нужных зависимостей, разрешить conan установку всех зависимостей самому
+conan install --build=missing . -of ./build -c tools.system.package_manager:mode=install -c tools.system.package_manager:sudo=True
+
+Собираем
+cmake . -B ./build -DCMAKE_BUILD_TYPE=Release
