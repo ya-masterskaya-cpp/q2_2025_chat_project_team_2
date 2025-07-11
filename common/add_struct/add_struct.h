@@ -36,5 +36,3 @@ enum CustomIDs {
     ID_TRAY_RESTORE = 10100,
     ID_TRAY_EXIT = 10101
 };
-
-

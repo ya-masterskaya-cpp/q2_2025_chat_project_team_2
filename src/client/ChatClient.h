@@ -8,6 +8,9 @@
 
 namespace client {
 
+using json = nlohmann::json;
+
+
 class ChatClient {
 public:
     using LoginHandler = std::function<void(const std::string&)>;
@@ -57,6 +60,18 @@ private:
     OtherUserNewNameHandler other_user_newname_handler_;
 
     void HandleNetworkMessage(const std::string& json_msg);
+    void HandleGeneralMessage(const json& j);
+    void HandleLoginMessage(const json& j);
+    void HandleChangeNameMessage(const json& j);
+    void HandleEnterRoomMessage(const json& j);
+    void HandleLeaveRoomMessage(const json& j);
+    void HandleCreateRoomMessage(const json& j);
+    void HandleAskRoomsMessage(const json& j);
+    void HandleAskUsersMessage(const json& j);
+    void HandleInfoNewNameMessage(const json& j);
+
+
+    std::chrono::system_clock::time_point ConvertToTimePoint(uint64_t unix_time_ns);
 };
 
 

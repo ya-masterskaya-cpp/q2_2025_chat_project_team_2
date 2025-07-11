@@ -108,6 +108,8 @@ add_library(GUILib STATIC
 	common/gui/RegisterDialog.cpp
 	common/gui/ListSelectionDialog.h
 	common/gui/ListSelectionDialog.cpp
+    common/gui/ConfigManager.h
+    common/gui/ConfigManager.cpp
 )
 target_include_directories(GUILib PUBLIC 
     ${PROJECT_SOURCE_DIR}/common/gui
