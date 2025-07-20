@@ -1,6 +1,20 @@
-[Описание библиотеки БД](./LibDB_ReadMe.md)
+[Описание библиотеки БД](./common/libdb/LibDB_ReadMe.md)
 
-[Описание интеграции сервера и БД](Server_DB_integration.md)
+[Описание интеграции сервера и БД](./common/chat_server_lib/Server_DB_integration.md)
+
+Команды сборки для Windows из корневой папки проекта
+- Для Debug:
+```
+conan install . --output-folder=build/debug -s build_type=Debug --build=missing
+cmake -S . -B build/debug -G "Visual Studio 17 2022" -A x64
+cmake --build build/debug --config Debug
+```
+- Для Release:
+```
+conan install conanfile_release.txt --output-folder=build/release -s build_type=Release --build=missing
+cmake -S . -B build/release -G "Visual Studio 17 2022" -A x64
+cmake --build build/release --config Release
+```
 
 1) Текущая архитектура:
 ```

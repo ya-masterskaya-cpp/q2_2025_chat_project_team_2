@@ -1,39 +1,39 @@
 #pragma once
-#include <sdkddkver.h>
 #define BOOST_DISABLE_CURRENT_LOCATION
 
+#include <atomic> 
 #include <boost/asio.hpp>
 #include <boost/beast.hpp>
-#include <iostream>
-#include <thread>
-#include <mutex>
 #include <condition_variable>
-#include <unordered_map>
-#include <vector>
+#include <csignal>
+#include <iostream>
+#include <mutex>
+#include <sdkddkver.h>
 #include <set>
-
-#include "nlohmann/json.hpp"    //добавил
-//#include "json.h"
+#include <thread>
+#include <unordered_map>
 #include <unordered_set>
+#include <vector>
+
+#include "common_struct.h"
+#include "db.hpp"
 #include "General.h"
 #include "Logger.h"
-#include <atomic>               //добавил
-#include <csignal>              //добавил
-#include "db.hpp"
+#include "nlohmann/json.hpp"
 #include "time_utils.hpp"
-#include "common_struct.h"
 
 namespace asio = boost::asio;
 namespace beast = boost::beast;
 namespace http = beast::http;
 namespace websocket = beast::websocket;
 using tcp = asio::ip::tcp;
+using json = nlohmann::json;
 
 struct MsgQueue
 {
     std::mutex m_;
     std::condition_variable cv_;
-    std::vector<nlohmann::json> msg_;
+    std::vector<json> msg_;
     bool is_online_ = true;
     bool is_valid_ = true;
     std::string login;
@@ -98,35 +98,28 @@ using RoomSessions = std::unordered_map<std::string, std::unordered_set<MsgQueue
 class Server
 {
 public:
-    virtual void run_server(db::DB& data_base);
+    void run_server(db::DB& data_base);
 
-    //добавил деструктор
-    virtual ~Server() { 
-        logger_.logEvent("Server shutting down gracefully");
-    }
-
-
-protected:
+private:
     void sender(tcp::socket socket, MsgQueue* session);
     void getter(tcp::socket socket, MsgQueue* session);
     virtual void client_accept();
     virtual void shuttle();
 
-    nlohmann::json make_ok_answer(int type, const std::string& what);
-    nlohmann::json make_err_answer(int type, const std::string& what, const std::string& reason = "");
+    json make_ok_answer(int type, const std::string& what);
+    json make_err_answer(int type, const std::string& what, const std::string& reason = "");
     bool check_login(const std::string& login, const std::string& password);
-    nlohmann::json register_user(const std::string& login, const std::string& password);
+    json register_user(const std::string& login, const std::string& password);
     void change_session(MsgQueue* session, const std::string& login);
-    nlohmann::json add_user(MsgQueue* session, const std::string& login);
-    nlohmann::json change_name(MsgQueue* session, const std::string& new_name);
-    nlohmann::json ask_rooms(MsgQueue* session);
-    nlohmann::json ask_users(const std::string& room);
+    json add_user(MsgQueue* session, const std::string& login);
+    json change_name(MsgQueue* session, const std::string& new_name);
+    json ask_rooms(MsgQueue* session);
+    json ask_users(const std::string& room);
     void remove_user(MsgQueue* session);
-    nlohmann::json create_room(MsgQueue* session, const std::string& room_name);
-    nlohmann::json enter_room(MsgQueue* session, const std::string& room_name);
-    nlohmann::json leave_room(MsgQueue* session, const std::string& room_name);
+    json create_room(MsgQueue* session, const std::string& room_name);
+    json enter_room(MsgQueue* session, const std::string& room_name);
+    json leave_room(MsgQueue* session, const std::string& room_name);
 
-//private:
     db::DB* db_;
     asio::io_context ioc;
     MsgQueue in_msg;
@@ -134,15 +127,9 @@ protected:
     Logger logger_;
     std::unordered_map<std::string, std::string> logged_users_;
     std::unordered_map<std::string, std::string> users_passwords_;
-    asio::signal_set signals_{ ioc, SIGINT, SIGTERM };      //добавил
-    std::atomic<bool> is_running_{ true };                  //добавил
+    asio::signal_set signals_{ ioc, SIGINT, SIGTERM };
+    std::atomic<bool> is_running_{ true };            
 
-    // для тестового сервера
-    tcp::acceptor in_acceptor_{ ioc };  // Инициализируем сразу с io_context
-    tcp::acceptor out_acceptor_{ ioc }; // Инициализируем сразу с io_context
-
-    // КЭШ: <имя_комнаты, {логин1, логин2, ...}>
     std::unordered_map<std::string, std::unordered_set<std::string>> members_who_wrote_;
-    // Мьютекс для защиты members_who_wrote_ 
     std::mutex members_mutex_;
 };
