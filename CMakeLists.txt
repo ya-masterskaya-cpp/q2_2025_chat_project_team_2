@@ -26,7 +26,17 @@ find_package(SQLite3 REQUIRED CONFIG)
 find_package(OpenSSL REQUIRED CONFIG) 
 find_package(nlohmann_json REQUIRED CONFIG)
 find_package(spdlog REQUIRED CONFIG)
-find_package(Catch2 REQUIRED CONFIG)
+find_package(Catch2 QUIET CONFIG)
+
+if(Catch2_FOUND)
+    message(STATUS "Catch2 found, enabling tests. (BUILD_TESTING=ON)")
+    option(BUILD_TESTING "Build the tests" ON)
+    # Включаем CTest для управления тестами
+    include(CTest) 
+else()
+    message(STATUS "Catch2 not found, disabling tests. (BUILD_TESTING=OFF)")
+    option(BUILD_TESTING "Build the tests" OFF)
+endif()
 
 # Настройка включения ресурсов
 set(RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/resources")

@@ -1,15 +1,17 @@
-#define CATCH_CONFIG_MAIN  // Должен быть только в одном файле
+#define CATCH_CONFIG_MAIN  
 #include <catch2/catch_test_macros.hpp>
+#include <iostream>
+#include <sstream>
+#include <streambuf>
+
 #include "db.hpp"
 #include "time_utils.hpp"
-
 
 TEST_CASE("DB initialization") {
     db::DB db(":memory:");
     REQUIRE(db.OpenDB() == true);
     REQUIRE(db.GetVersionDB().empty() == false);
 }
-
 TEST_CASE("User management 1") {
     db::DB db(":memory:");
     db.OpenDB();
@@ -45,12 +47,17 @@ TEST_CASE("User management 1") {
        db.CreateUser(test_user);
        auto user_info = db.GetUserData("test_login");
        REQUIRE(user_info->name == "Test User");
-       auto user_info_not_exist = db.GetUserData("test");  // здесь выводится ошибка [GetUserData] SQL error or unexpected result (101): no more rows available, это правильно
-       REQUIRE(user_info_not_exist == std::nullopt);
+       {
+           std::streambuf* buf(std::cerr.rdbuf());
+           std::stringstream output;
+           std::cerr.rdbuf(output.rdbuf());
+           auto user_info_not_exist = db.GetUserData("test");
+           REQUIRE(output.str() == "[GetUserData] SQL error or unexpected result (101): no more rows available\n");
+           std::cerr.rdbuf(buf);
+           REQUIRE(user_info_not_exist == std::nullopt);
+       }
    }
-
 }
-
 TEST_CASE("Room management 1") {
     db::DB db(":memory:");
     db.OpenDB();
@@ -139,7 +146,6 @@ TEST_CASE("Room management 2"){
     db.AddUserToRoom("user1", "general");
     db.InsertMessageToDB(msg);
 
-    // при удалении комнаты происходит удаление сообщений из БД, привязки к пользователю
     SECTION("Delete room and messages room in table messages") {
         REQUIRE(db.GetCountRoomMessages("general") == 1);
         REQUIRE(db.IsRoom("general") == true);
@@ -154,7 +160,6 @@ TEST_CASE("Room management 2"){
         REQUIRE(db.GetUserRooms("user1").empty() == true);
     }
 }
-
 TEST_CASE("Message History and Pagination") {
 
     db::DB db(":memory:");
@@ -177,7 +182,7 @@ TEST_CASE("Message History and Pagination") {
     }
 
     SECTION("Pagination and get count messages") {
-        // Добавляем 60 сообщений
+
         for (int i = 0; i < 60; i++) {
             int64_t u_time = utime::GetUnixTimeNs();
             db.InsertMessageToDB({ std::to_string(i), u_time, "user1", "general" });
@@ -244,6 +249,42 @@ TEST_CASE("User management 2") {
         REQUIRE(db.GetDeletedUsers().size() == 0);
     }
 }
+TEST_CASE("Rooms and users") {
+
+    db::DB db(":memory:");
+    db.OpenDB();
+
+    db::User user1{ "user1", "Name1", "hash", "user", false, utime::GetUnixTimeNs() };
+    db::User user2{ "user2", "Name2", "hash", "user", false, utime::GetUnixTimeNs() };
+    db::User user3{ "user3", "Name3", "hash", "user", false, utime::GetUnixTimeNs() };
+    db.CreateUser(user1);
+    db.CreateUser(user2);
+    db.CreateUser(user3);
+
+    db.CreateRoom("general", utime::GetUnixTimeNs());
+    db.CreateRoom("room", utime::GetUnixTimeNs());
+    db.CreateRoom("empty_room", utime::GetUnixTimeNs());
+
+    db.AddUserToRoom("user1", "general");
+    db.AddUserToRoom("user1", "room");
+    db.AddUserToRoom("user2", "room");
+
+    SECTION("Get All Room With Registered Users") {
+        auto rooms_with_users_in = move(db.GetAllRoomWithRegisteredUsers());
+        REQUIRE(rooms_with_users_in.size() == 2);
+        REQUIRE(rooms_with_users_in.find("empty_room") == rooms_with_users_in.end());
+
+        REQUIRE(rooms_with_users_in["room"].size() == 2);
+        REQUIRE(rooms_with_users_in["room"].find("user1") != rooms_with_users_in["room"].end());
+        REQUIRE(rooms_with_users_in["room"].find("user2") != rooms_with_users_in["room"].end());
+        REQUIRE(rooms_with_users_in["room"].find("user3") == rooms_with_users_in["room"].end());
+
+        REQUIRE(rooms_with_users_in["general"].size() == 1);
+        REQUIRE(rooms_with_users_in["general"].find("user1") != rooms_with_users_in["general"].end());
+        REQUIRE(rooms_with_users_in["general"].find("user2") == rooms_with_users_in["general"].end());
+        REQUIRE(rooms_with_users_in["general"].find("user3") == rooms_with_users_in["general"].end());
+    }
+}
 TEST_CASE("Duplicate entries handling") {
     db::DB db(":memory:");
     db.OpenDB();
@@ -254,15 +295,15 @@ TEST_CASE("Duplicate entries handling") {
 
     SECTION("Creating a user with an existing login should be ignored") {
         db::User duplicate_user{ "user1", "Another Name", "another_hash", "admin", false, utime::GetUnixTimeNs() };
-        REQUIRE(db.CreateUser(duplicate_user) == true); // INSERT OR IGNORE вернет success
+        REQUIRE(db.CreateUser(duplicate_user) == true); 
         REQUIRE(db.GetAllUsers().size() == 1);
         auto users = db.GetAllUsers();
-        REQUIRE(users[0].name == "Name"); // Проверяем, что данные не изменились
+        REQUIRE(users[0].name == "Name"); 
     }
 
     SECTION("Adding a user to the same room twice should be ignored") {
         REQUIRE(db.AddUserToRoom("user1", "general") == true);
-        REQUIRE(db.AddUserToRoom("user1", "general") == true); // INSERT OR IGNORE
+        REQUIRE(db.AddUserToRoom("user1", "general") == true); 
         REQUIRE(db.GetUserRooms("user1").size() == 1);
     }
 }

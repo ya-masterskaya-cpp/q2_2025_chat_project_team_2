@@ -1,10 +1,10 @@
 #pragma once
-#include <string>
-#include <vector>
-#include <sqlite3.h>
 #include <optional>
+#include <sqlite3.h>
+#include <string>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 
 namespace db {
     struct User {
@@ -83,7 +83,6 @@ namespace db {
         bool InitSchema();
         bool SetUserForDelete(const std::string& user_login);
         bool PerformSQLReturnBool(const char* sql_query, std::vector<std::string> param);
-        // окончательное  удаление пользователей помеченных как удаленные, если нет комнат с пользователем, удаляем его из БД
         bool DelDeletedUsersWithoutRoom();
         std::vector<User> GetUsers(const char* sql);
     };

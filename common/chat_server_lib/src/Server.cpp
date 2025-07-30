@@ -3,29 +3,26 @@
 void Server::run_server(db::DB& data_base) {
     logger_.logEvent("Server started");
     
-    // подключили БД и подгружаем логины с паролями, в том числе и мягко удаленных пользователей
     db_ = &data_base;
     for (auto& user : db_->GetAllUsers()) {
         users_passwords_[user.login] = user.password_hash;
     }
     db_->CreateRoom("general", utime::GetUnixTimeNs());
 
-    // подгружаем связи комната - пользователь
     members_who_wrote_ = move(db_->GetAllRoomWithRegisteredUsers());
     logger_.logEvent("Room membership cache loaded.");
 
-    // Добавил поддержку signal handler
     signals_.async_wait([this](const boost::system::error_code& /*ec*/, int /*signo*/) {
         logger_.logEvent("Shutdown signal received");
         is_running_ = false;
-        ioc.stop();         // остановим все acceptor'ы
-        in_msg.finish();    // завершим shuttle
+        ioc.stop();
+        in_msg.finish();
         });
 
     std::thread(&Server::shuttle, this).detach();
     std::thread(&Server::client_accept, this).detach();
 
-    ioc.run();  // изменил - теперь основной цикл
+    ioc.run();
 
     logger_.logEvent("Server stopped");
 }
@@ -36,7 +33,7 @@ void Server::sender(tcp::socket socket, MsgQueue* session) {
     ws.write(asio::buffer(
         MesBuilder(GENERAL).add("content", "hello").toString()
     ));
-    if (!session->wait_on_queue([&](const nlohmann::json& j) {
+    if (!session->wait_on_queue([&](const json& j) {
         ws.write(asio::buffer(j.dump())); })
         ) {
         delete session;
@@ -50,12 +47,12 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
         beast::flat_buffer buffer;
         bool finished = false;
 
-        while (!finished && is_running_) //добавил проверку
+        while (!finished && is_running_)
         {
             ws.read(buffer);
-            nlohmann::json mes = nlohmann::json::parse(beast::buffers_to_string(buffer.data()));
-            nlohmann::json ans;
-            nlohmann::json res;
+            json mes = json::parse(beast::buffers_to_string(buffer.data()));
+            json ans;
+            json res;
             ans["type"] = 0;
             int type = mes["type"];
             switch (type)
@@ -138,7 +135,7 @@ void Server::getter(tcp::socket socket, MsgQueue* session) {
 void Server::client_accept() {
     tcp::acceptor in_acceptor(ioc, tcp::endpoint(tcp::v4(), in_port));
     tcp::acceptor out_acceptor(ioc, tcp::endpoint(tcp::v4(), out_port));
-    while (is_running_) { //добавил проверку
+    while (is_running_) {
         MsgQueue* session = new MsgQueue;
 
         tcp::socket in_socket(ioc);
@@ -152,13 +149,12 @@ void Server::client_accept() {
 }
 
 void Server::shuttle() {
-    in_msg.wait_on_queue([&](const nlohmann::json& j) {
+    in_msg.wait_on_queue([&](const json& j) {
 
         if (j.contains("type") && j["type"] == GENERAL &&
             j.contains("login") && j.contains("room") &&
             j.contains("content") && j.contains("server_timestamp"))
         {
-            // Извлекаем данные, которые мы добавили в getter'е
             const std::string& login = j["login"];
             const std::string& room_name = j["room"];
             const std::string& content = j["content"];
@@ -171,13 +167,11 @@ void Server::shuttle() {
                 is_first_message = writers_in_this_room.insert(login).second;
             } 
 
-            // Первое сообщение в комнате автоматом привязывает пользователя к комнате в БД
             if (is_first_message) {
                 logger_.logEvent("User '" + login + "' wrote first message in '" + room_name + "'. Creating DB link.");
                 db_->AddUserToRoom(login, room_name);
             }
 
-            // Выполняем запись сообщения в БД
             if (!db_->InsertMessageToDB({ content, timestamp, login, room_name })) {
                 logger_.logError("Failed to save message to DB for user " + login);
             }
@@ -188,11 +182,11 @@ void Server::shuttle() {
     });
 }
 
-nlohmann::json Server::make_ok_answer(int type, const std::string& what) {
+json Server::make_ok_answer(int type, const std::string& what) {
     return MesBuilder(type).add("what", what).add("answer", "OK").j;
 }
 
-nlohmann::json Server::make_err_answer(int type, const std::string& what, const std::string& reason) {
+json Server::make_err_answer(int type, const std::string& what, const std::string& reason) {
     return MesBuilder(type).add("what", what).add("answer", "err").add("reason", reason).j;
 }
 
@@ -209,7 +203,7 @@ bool Server::check_login(const std::string& login, const std::string& password) 
     return false;
 }
 
-nlohmann::json Server::register_user(const std::string& login, const std::string& password) {
+json Server::register_user(const std::string& login, const std::string& password) {
     if (users_passwords_.count(login) || db_->IsUser(login)) {
         logger_.logEvent("User (login: " + login + ") already exists.");
         return make_err_answer(REGISTER, login, LOGIN_EXISTS);
@@ -217,7 +211,6 @@ nlohmann::json Server::register_user(const std::string& login, const std::string
     users_passwords_[login] = password;
     logger_.logEvent("User (login: " + login + ") is created.");
 
-    // сохранение пользователя в БД
     if (db_->CreateUser({ login, login, password,"user", false, utime::GetUnixTimeNs() })) {
         db_->AddUserToRoom(login, "general");
         logger_.logEvent("User (login: " + login + ") saved to Data Base");
@@ -232,10 +225,9 @@ nlohmann::json Server::register_user(const std::string& login, const std::string
 void Server::change_session(MsgQueue* session, const std::string& login) {
     MsgQueue* old_session = *users_[logged_users_[login]].begin();
     if (old_session->is_online_) {
-        nlohmann::json ans = make_err_answer(LOGIN, login, USER_EXISTS);
+        json ans = make_err_answer(LOGIN, login, USER_EXISTS);
         ans["name"] = session->name;
         session->add(ans);
-        //session->add(make_err_answer(LOGIN, login, USER_EXISTS));
     }
     else {
         for (auto& u : users_) {
@@ -245,25 +237,22 @@ void Server::change_session(MsgQueue* session, const std::string& login) {
         }
         session->login = login;
         session->name = logged_users_[login];
-        nlohmann::json ans = make_ok_answer(LOGIN, login);
+        json ans = make_ok_answer(LOGIN, login);
         ans["name"] = session->name;
         session->add(ans);
-        // session->add(make_ok_answer(LOGIN, login));
         *session = *old_session;
         delete old_session;
         logger_.logEvent("Client " + login + " connected again");
     }
 }
 
-nlohmann::json Server::add_user(MsgQueue* session, const std::string& login) {
+json Server::add_user(MsgQueue* session, const std::string& login) {
     auto user_data_opt = db_->GetUserData(login);
     if (user_data_opt) {
         auto& user_data = *user_data_opt;
 
-        // проверка на то, что пользователь мягко удален (чего пока нет в логике сервера)
         if (user_data.is_deleted) {
             logger_.logError("Attempt to login by a deleted user: " + login);
-            // по идее, здесь нужно вернуть ошибку, а не продолжать
             return make_err_answer(LOGIN, login, "User account is disabled");
         }
 
@@ -273,15 +262,11 @@ nlohmann::json Server::add_user(MsgQueue* session, const std::string& login) {
         session->name = user_data.name;
         session->login = login;
         logger_.logEvent("Client " + login + " logged in");
-        nlohmann::json response = make_ok_answer(LOGIN, login);
-        response["name"] = user_data.name; // user_data.name - это ваш current_name
+        json response = make_ok_answer(LOGIN, login);
+        response["name"] = user_data.name;
         return response;
     }
 
-    // Пользователя нет в БД (нештатная ситуация) ---
-    // Эта ветка сработает, только если check_login и add_user рассинхронизированы
-    // (например, кто-то удалил пользователя из БД между двумя вызовами).
-    // Оставляем вашу логику как "аварийный" вариант.
     logger_.logError("User " + login + " not found in DB, but passed check_login. Creating temporary session.");
     logged_users_[login] = login;
     users_[login].insert(session);
@@ -292,7 +277,7 @@ nlohmann::json Server::add_user(MsgQueue* session, const std::string& login) {
     return make_ok_answer(LOGIN, login);
 }
 
-nlohmann::json Server::change_name(MsgQueue* session, const std::string& new_name) {
+json Server::change_name(MsgQueue* session, const std::string& new_name) {
     if (users_.count(new_name)) {
         return make_err_answer(CHANGE_NAME, new_name, NAME_EXISTS);
     }
@@ -310,7 +295,7 @@ nlohmann::json Server::change_name(MsgQueue* session, const std::string& new_nam
     return make_ok_answer(CHANGE_NAME, new_name);
 }
 
-nlohmann::json Server::ask_rooms(MsgQueue* session) {
+json Server::ask_rooms(MsgQueue* session) {
     std::set<std::string> unique_room_names;
     for (auto& u : users_) {
         unique_room_names.insert(u.first);
@@ -327,7 +312,7 @@ nlohmann::json Server::ask_rooms(MsgQueue* session) {
     return MesBuilder(ASK_ROOMS).add("rooms", v).j;
 }
 
-nlohmann::json Server::ask_users(const std::string& room) {
+json Server::ask_users(const std::string& room) {
     std::vector<std::string> v;
     if (!users_.count(room)) {
         return make_err_answer(ASK_USERS, room, NO_ROOM);
@@ -352,7 +337,7 @@ void Server::remove_user(MsgQueue* session) {
     logger_.logEvent("Client " + session->login + " left chat");
 }
 
-nlohmann::json Server::create_room(MsgQueue* session, const std::string& room_name) {
+json Server::create_room(MsgQueue* session, const std::string& room_name) {
     if (users_.count(room_name) || db_->IsRoom(room_name)) {
         return make_err_answer(CREATE_ROOM, room_name, ROOM_EXISTS);
     }
@@ -361,7 +346,6 @@ nlohmann::json Server::create_room(MsgQueue* session, const std::string& room_na
     users_.emplace(std::make_pair(room_name, std::unordered_set<MsgQueue*>()));
     logger_.logEvent("Room " + room_name + " created");
 
-    // создание комнаты в БД и привязка к создателю
     if (db_->CreateRoom(room_name, utime::GetUnixTimeNs())) {
         db_->AddUserToRoom(login, room_name);
         logger_.logEvent("Room " + room_name + " saved to Data Base");
@@ -373,21 +357,11 @@ nlohmann::json Server::create_room(MsgQueue* session, const std::string& room_na
     return make_ok_answer(CREATE_ROOM, room_name);
 }
 
-nlohmann::json Server::enter_room(MsgQueue* session, const std::string& room_name) {
- //  if (!users_.count(room_name)) {
- //      return make_err_answer(ENTER_ROOM, room_name, NO_ROOM);
- //  }
- //  if (!users_[room_name].insert(session).second) {
- //      return make_err_answer(ENTER_ROOM, room_name, ENTER_TWICE);
- //  }
- //  return make_ok_answer(ENTER_ROOM, room_name);
-
+json Server::enter_room(MsgQueue* session, const std::string& room_name) {
     auto it = users_.find(room_name);
 
     if (it == users_.end()) {
-        // Комнаты в памяти нет. Проверяем, есть ли она в БД.
         if (db_->IsRoom(room_name)) {
-            // Комната есть в БД! Создаем ее в памяти "на лету".
             users_.emplace(room_name, std::unordered_set<MsgQueue*>());
         }
         else {
@@ -401,7 +375,7 @@ nlohmann::json Server::enter_room(MsgQueue* session, const std::string& room_nam
     return make_ok_answer(ENTER_ROOM, room_name);
 }
 
-nlohmann::json Server::leave_room(MsgQueue* session, const std::string& room_name) {
+json Server::leave_room(MsgQueue* session, const std::string& room_name) {
     if (!users_.count(room_name)) {
         return make_err_answer(LEAVE_ROOM, room_name, NO_ROOM);
     }
